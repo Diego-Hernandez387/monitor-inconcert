@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor InConcert MAS</title>
+<!-- Solo para la versión publicada en GitHub: si la página no está en usuario.github.io/repositorio,
+     escribe aquí el repositorio, por ejemplo content="mi-organizacion/monitor-inconcert" -->
+<meta name="monitor-repo" content="">
+<meta name="monitor-rama" content="datos">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: consola de monitoreo — banner de estado arriba, "electrocardiograma" de la base de datos como protagonista, rejilla de servicios complementarios y bitácora de incidentes debajo */
+:root{
+  --bg:#f2f4f6; --surface:#ffffff; --surface-2:#eceff2; --fg:#12171c; --muted:#58636e; --line:#d9dfe5; --grid:#e6eaee;
+  --accent:#2a78d6; --band:rgba(42,120,214,.10);
+  --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+  --good-ink:#0a6f0a; --warn-ink:#7f5300; --serious-ink:#a94a22; --crit-ink:#b02e2e;
+  --good-bg:rgba(12,163,12,.10); --warn-bg:rgba(250,178,25,.16); --serious-bg:rgba(236,131,90,.16); --crit-bg:rgba(208,59,59,.12);
+  --display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1115; --surface:#151b20; --surface-2:#1c2329; --fg:#eef2f5; --muted:#9ba7b1; --line:#29323a; --grid:#20282f;
+    --accent:#3987e5; --band:rgba(57,135,229,.15);
+    --good-ink:#5fd35f; --warn-ink:#fab219; --serious-ink:#f0946f; --crit-ink:#f07373;
+    --good-bg:rgba(12,163,12,.16); --warn-bg:rgba(250,178,25,.14); --serious-bg:rgba(236,131,90,.16); --crit-bg:rgba(208,59,59,.20);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1115; --surface:#151b20; --surface-2:#1c2329; --fg:#eef2f5; --muted:#9ba7b1; --line:#29323a; --grid:#20282f;
+  --accent:#3987e5; --band:rgba(57,135,229,.15);
+  --good-ink:#5fd35f; --warn-ink:#fab219; --serious-ink:#f0946f; --crit-ink:#f07373;
+  --good-bg:rgba(12,163,12,.16); --warn-bg:rgba(250,178,25,.14); --serious-bg:rgba(236,131,90,.16); --crit-bg:rgba(208,59,59,.20);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:22px 56px;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:.005em}
+h1{font-size:28px;font-weight:700}
+h2{font-size:20px;font-weight:600}
+h3{font-size:16px;font-weight:600}
+.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+.top-left{display:flex;flex-direction:column;gap:2px;min-width:0}
+.top-right{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sim{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px dashed var(--muted);color:var(--muted)}
+.clock{font-size:13px;color:var(--muted)}
+
+/* banner */
+.banner{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;align-items:center;border-width:1px;border-style:solid;border-radius:10px;padding:16px 18px;background:var(--surface)}
+.banner[data-s="good"]{border-color:var(--good);background:linear-gradient(var(--good-bg),var(--good-bg)),var(--surface)}
+.banner[data-s="warn"]{border-color:var(--warn);background:linear-gradient(var(--warn-bg),var(--warn-bg)),var(--surface)}
+.banner[data-s="serious"]{border-color:var(--serious);background:linear-gradient(var(--serious-bg),var(--serious-bg)),var(--surface)}
+.banner[data-s="crit"]{border-color:var(--crit);background:linear-gradient(var(--crit-bg),var(--crit-bg)),var(--surface)}
+.big-state{font-family:var(--display);font-size:30px;font-weight:700;display:flex;align-items:center;gap:10px;grid-row:span 2}
+.big-state .ico{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:18px;color:#fff;flex:none}
+.banner-text{min-width:0}
+.banner-text b{font-weight:600}
+.banner-action{font-size:14px;color:var(--muted);min-width:0}
+@media (max-width:620px){.banner{grid-template-columns:1fr}.big-state{grid-row:auto;font-size:26px}}
+
+/* status pill */
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:3px 9px 3px 6px;border-radius:999px;white-space:nowrap}
+.pill i{font-style:normal;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:10px;color:#fff}
+.s-good{color:var(--good-ink);background:var(--good-bg)} .s-good i,.ico.s-good{background:var(--good)}
+.s-warn{color:var(--warn-ink);background:var(--warn-bg)} .s-warn i,.ico.s-warn{background:var(--warn);color:#3a2a00}
+.s-serious{color:var(--serious-ink);background:var(--serious-bg)} .s-serious i,.ico.s-serious{background:var(--serious)}
+.s-crit{color:var(--crit-ink);background:var(--crit-bg)} .s-crit i,.ico.s-crit{background:var(--crit)}
+.ico.s-warn{color:#3a2a00}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button,.btn{font:inherit;font-size:14px;font-weight:500;border:0;background:transparent;color:var(--fg);padding:7px 12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.btn{border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.seg button:hover:not([aria-pressed="true"]),.btn:hover{background:var(--surface-2)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctl-note{font-size:13px;color:var(--muted)}
+
+/* main chart card */
+.main-head{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between;align-items:flex-start}
+.main-head>div{min-width:0}
+.stats{display:flex;flex-wrap:wrap;gap:6px 26px}
+.stat{display:flex;flex-direction:column;gap:0}
+.stat .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.stat .v{font-family:var(--mono);font-size:19px;font-weight:500;font-variant-numeric:tabular-nums}
+.chart{position:relative;margin-top:14px;width:100%}
+.chart svg{display:block;width:100%;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.14);min-width:200px;z-index:2}
+.tip table{border-collapse:collapse;width:100%;margin-top:6px}
+.tip td{padding:1px 0}
+.tip td:last-child{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;padding-left:14px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw-line{width:20px;height:2px;background:var(--accent);border-radius:2px}
+.sw-band{width:18px;height:10px;background:var(--band);border:1px solid var(--line)}
+.sw-dash{width:20px;height:0;border-top:2px dashed var(--warn)}
+.sw-dash.c{border-top-color:var(--crit)}
+.sw-dot{width:9px;height:9px;border-radius:50%;background:var(--crit)}
+.services{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:16px}
+.svc{background:var(--surface-2);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.svc-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.svc-name{font-weight:600;font-size:14px}
+.svc-id{font-family:var(--mono);font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
+.svc-val{font-family:var(--mono);font-size:18px;font-variant-numeric:tabular-nums}
+.svc-delta{font-size:12.5px;color:var(--muted)}
+
+/* complementary */
+.section-head{display:flex;flex-direction:column;gap:2px}
+.comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:12px;margin-top:12px}
+.comp{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px}
+.comp-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.comp .val{font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums}
+.comp .desc{font-size:12.5px;color:var(--muted);font-family:var(--mono);overflow-wrap:anywhere}
+.spark{width:100%;height:38px;display:block}
+
+/* incidents */
+.tbl-wrap{overflow-x:auto;margin-top:12px}
+table.inc{border-collapse:collapse;width:100%;min-width:900px;font-size:14px}
+.inc th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+.inc td{padding:9px 10px;border-bottom:1px solid var(--grid);vertical-align:top}
+.inc td.mono{white-space:nowrap}
+.lead{font-weight:600;color:var(--good-ink)}
+.empty{padding:16px 10px;color:var(--muted)}
+
+/* rules */
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px}
+.rule{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border-radius:8px;padding:12px 14px;min-width:0}
+.rule p{margin:0;font-size:14px}
+.rule .act{font-size:13px;color:var(--muted)}
+.foot{font-size:13px;color:var(--muted);max-width:75ch}
+
+/* pestañas por alianza */
+.tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.tab{font:inherit;color:var(--fg);text-align:left;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0}
+.tab:hover{background:var(--surface-2)}
+.tab[aria-selected="true"]{border:2px solid var(--accent);padding:11px 13px}
+.tab-name{font-family:var(--display);font-size:20px;font-weight:700}
+.tab-sub{display:block;font-size:12.5px;color:var(--muted);font-family:var(--body);font-weight:400}
+.tab-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.tab-ms{font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.cross{margin:0;font-size:14px;padding:10px 14px;border-radius:8px;background:var(--surface-2)}
+.cross b{font-weight:600}
+@keyframes pulse{0%{r:4;opacity:.7}100%{r:13;opacity:0}}
+.pulse{animation:pulse 1.4s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none;opacity:0}}
+
+body{margin:0}
+[hidden]{display:none!important}
+/* Qué se afectó: nombre de la asesora y, al lado en gris, el nombre técnico */
+.afect{display:block;line-height:1.35;margin:1px 0}
+.afect .svc-id{display:inline;margin-left:6px;font-size:11px}
+td.afect-col{min-width:250px}
+td.notan{min-width:170px;max-width:220px}
+.chan-row .n .svc-id,.comp h3 .svc-id{display:block;margin-top:1px;font-weight:400}
+/* Tarjetas complementarias: el nombre ocupa todo el ancho y el estado va debajo */
+.comp-row{flex-direction:column;align-items:flex-start;gap:6px}
+
+
+/* --- añadidos de la versión real --- */
+.s-none{color:var(--muted);background:var(--surface-2)} .s-none i{background:var(--muted)}
+.banner[data-s="none"]{border-color:var(--line)}
+.ico.s-none{background:var(--muted)}
+.offline{border:1px solid var(--crit);background:linear-gradient(var(--crit-bg),var(--crit-bg)),var(--surface);border-radius:10px;padding:10px 14px;font-size:14px}
+.channels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
+.chan{display:flex;flex-direction:column;gap:10px;min-width:0}
+.chan-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.chan-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;padding-top:10px;border-top:1px solid var(--grid)}
+.chan-row .n{font-weight:600;font-size:14px}
+.chan-row .d{font-size:12.5px;color:var(--muted);grid-column:1}
+.chan-row .val{font-family:var(--mono);font-size:16px;font-variant-numeric:tabular-nums;text-align:right}
+.chan-row .spark{grid-column:1 / -1}
+.mode{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px dashed var(--muted);color:var(--muted)}
+.range-row{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:14px}
+.seg button{white-space:nowrap}
+.sw-max{width:20px;height:0;border-top:1.5px solid var(--accent);opacity:.35}
+.stack{display:flex;flex-direction:column;gap:18px}
+.viewsel{align-self:flex-start}
+.hist-grid-wrap{overflow-x:auto;margin-top:14px}
+.cal{display:grid;grid-template-columns:96px repeat(31,minmax(0,1fr));gap:3px;min-width:640px}
+.cal .lbl,.wk .lbl{font-size:13px;font-weight:600;align-self:center;padding-right:6px;white-space:nowrap}
+.cal .hd,.wk .hd{font-size:10.5px;color:var(--muted);text-align:center;font-family:var(--mono)}
+.cal .c{aspect-ratio:1;border-radius:3px}
+.d-good{background:var(--good);opacity:.35}.d-warn{background:var(--warn)}.d-serious{background:var(--serious)}.d-crit{background:var(--crit)}
+.d-none{border:1px dashed var(--line)}.d-out{visibility:hidden}
+.c.hoy{outline:2px solid var(--fg);outline-offset:1px}
+.wk{display:grid;grid-template-columns:52px repeat(24,minmax(0,1fr));gap:2px;min-width:640px}
+.wk .w{aspect-ratio:1.6;border-radius:2px;background:color-mix(in srgb,var(--serious) calc(var(--o,0)*100%),var(--surface-2))}
+.scale{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);margin-top:10px}
+.scale i{display:block;width:140px;height:10px;border-radius:2px;background:linear-gradient(90deg,var(--surface-2),var(--serious))}
+.cal-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted);margin-top:10px}
+.cal-legend span{display:inline-flex;align-items:center;gap:6px}.cal-legend b{display:inline-block;width:12px;height:12px;border-radius:3px}
+table.mes{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+.mes th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+.mes td{padding:10px;border-bottom:1px solid var(--grid)}
+.mes td.n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+#htip{position:fixed;pointer-events:none;z-index:5}
+.zoombar{display:inline-flex;align-items:center;gap:10px;font-size:13px;padding:4px 4px 4px 12px;border:1px solid var(--accent);border-radius:8px}
+.zoombar .btn{padding:4px 10px}
+#hit{cursor:crosshair}
+.cal .c[data-dia]{cursor:pointer}
+/* Encabezado de marca (opción A). Los colores de Scala Learning se usan SOLO aquí;
+   los colores de estado y de la gráfica no cambian, para que la marca no se confunda con una alerta. */
+:root{--marca:#575D8D;--marca-oscuro:#4A4F7C;--marca-acento:#FF6E01}
+.top{background:linear-gradient(120deg,var(--marca) 0%,var(--marca-oscuro) 100%);border-radius:14px;padding:20px 24px 22px;color:#fff;align-items:center;
+  box-shadow:inset 0 -4px 0 var(--marca-acento),0 8px 24px rgba(74,79,124,.18)}
+.top-left{flex-direction:row;align-items:center;gap:18px}
+.brand-logo{height:54px;width:auto;flex:none}
+.brand-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.top .eyebrow{color:rgba(255,255,255,.72)}
+.top h1{color:#fff;font-size:30px;letter-spacing:.01em}
+/* Celular: el selector de rango pasa a una cuadrícula de 3×2 para que no se corte,
+   y en la gráfica solo se permite arrastrar en horizontal (el desplazamiento vertical sigue funcionando). */
+#hit{touch-action:pan-y}
+@media (max-width:620px){
+  #rangeSel{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);width:100%}
+  #rangeSel button{border-left:0!important;background:var(--surface);padding:9px 6px}
+  #rangeSel button[aria-pressed="true"]{background:var(--accent)}
+  .controls .seg{flex-wrap:wrap}
+  .range-row{flex-direction:column;align-items:stretch}
+}
+.top .mode,.top .mode.real{color:#fff;border-color:rgba(255,255,255,.55)}
+.top .clock{color:rgba(255,255,255,.75)}.top .clock b{color:#fff}
+@media (max-width:620px){.brand-logo{height:40px}.top h1{font-size:24px}}
+.mode.real{border-style:solid;border-color:var(--good);color:var(--good-ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="top-left">
+      <img class="brand-logo" alt="Scala Learning" src="data:image/png;base64,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">
+      <div class="brand-text">
+        <span class="eyebrow">Mesa de ayuda TI · Scala Learning</span>
+        <h1>Monitor InConcert MAS</h1>
+      </div>
+    </div>
+    <div class="top-right">
+      <span class="mode" id="modeBadge">–</span>
+      <span class="clock">Última medición <b class="mono" id="clock">--:--</b></span>
+    </div>
+  </header>
+
+  <div class="offline" id="offline" hidden>No hay conexión con el monitor. Revisa que la ventana del monitor siga abierta en el PC donde corre.</div>
+
+  <nav class="tabs" role="tablist" aria-label="Alianza" id="tabs"></nav>
+  <p class="cross" id="cross" aria-live="polite"></p>
+
+  <div class="seg viewsel" id="viewSel" role="group" aria-label="Vista">
+    <button data-v="vivo" aria-pressed="true">En vivo</button>
+    <button data-v="hist" aria-pressed="false">Histórico · 3 meses</button>
+  </div>
+
+  <div class="stack" id="vistaVivo">
+
+  <section class="banner" id="banner" data-s="none" aria-live="polite">
+    <div class="big-state" id="bigState">Cargando…</div>
+    <div class="banner-text" id="bannerText"></div>
+    <div class="banner-action" id="bannerAction"></div>
+  </section>
+
+  <div class="controls" id="demoControls" hidden>
+    <span class="eyebrow">Demo · simular en <span id="scName"></span></span>
+    <div class="seg" role="group" aria-label="Escenario">
+      <button data-sc="normal" aria-pressed="true">Normal</button>
+      <button data-sc="degradacion" aria-pressed="false">Degradación lenta</button>
+      <button data-sc="caida" aria-pressed="false">Caída súbita</button>
+    </div>
+    <span class="ctl-note">Solo aparece mientras la alianza está en modo demo.</span>
+  </div>
+
+  <section class="card">
+    <div class="main-head">
+      <div>
+        <h2>Servicios de base de datos</h2>
+        <div class="muted" style="font-size:14px" id="mainSub">Peor tiempo de respuesta entre las consultas que leen la base de datos</div>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="k">Normal aprendido</span><span class="v" id="stBase">–</span></div>
+        <div class="stat"><span class="k">Mediana reciente</span><span class="v" id="stMed">–</span></div>
+        <div class="stat"><span class="k">Variación</span><span class="v" id="stVar">–</span></div>
+        <div class="stat"><span class="k" id="stAvK">Disponibilidad</span><span class="v" id="stAv">–</span></div>
+      </div>
+    </div>
+    <div class="range-row">
+      <div class="seg" id="rangeSel" role="group" aria-label="Rango de tiempo">
+        <button data-r="3h" aria-pressed="false">3 h</button>
+        <button data-r="6h" aria-pressed="true">6 h</button>
+        <button data-r="12h" aria-pressed="false">12 h</button>
+        <button data-r="24h" aria-pressed="false">24 h</button>
+        <button data-r="7d" aria-pressed="false">7 días</button>
+        <button data-r="mes" aria-pressed="false">Lo que va del mes</button>
+      </div>
+      <span class="zoombar" id="zoomBar" hidden><span class="mono" id="zoomTxt"></span><button class="btn" id="zoomBack">Volver</button></span>
+      <span class="ctl-note" id="rangeNote"></span>
+    </div>
+    <div class="chart" id="chart"><svg id="ecg" role="img" aria-label="Tiempo de respuesta de los servicios de base de datos"></svg><div class="tip" id="tip" hidden></div></div>
+    <div class="legend">
+      <span><i class="sw-line"></i><span id="lgLine">Peor respuesta del grupo</span></span>
+      <span id="lgMax" hidden><i class="sw-max"></i>Valor más alto del bloque</span>
+      <span><i class="sw-band"></i>Rango normal (±30%)</span>
+      <span><i class="sw-dash"></i><span id="lgLento">500 ms: lento</span></span>
+      <span><i class="sw-dash c"></i><span id="lgCrit">2 s: crítico</span></span>
+      <span><i class="sw-dot"></i>Sin respuesta</span>
+      <span class="muted">Escala logarítmica</span>
+    </div>
+    <div class="services" id="dbServices"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Canales</h2>
+      <span class="muted" style="font-size:14px">Si un asesor dice "no me entran llamadas" o "no llegan los WhatsApp", aquí se ve en qué capa está el problema.</span>
+    </div>
+    <div class="channels" id="channels"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Servicios complementarios</h2>
+      <span class="muted" style="font-size:14px">Si estos siguen bien mientras la base de datos falla, el problema está en la base de datos de InConcert.</span>
+    </div>
+    <div class="comp-grid" id="compGrid"></div>
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <h2>Bitácora de incidentes</h2>
+      <span class="muted" style="font-size:14px">Se registra sola. "Aviso anticipado" muestra cuánto antes de quedar sin respuesta lo detectó el monitor.</span>
+    </div>
+    <div class="tbl-wrap">
+      <table class="inc">
+        <thead><tr><th>Inicio</th><th>Fin</th><th>Duración</th><th>Peor estado</th><th>Qué notaron las asesoras</th><th>Pico</th><th>Aviso anticipado</th><th>Qué se afectó</th></tr></thead>
+        <tbody id="incBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Cómo decide el estado</h2>
+      <span class="muted" style="font-size:14px">Se evalúa en cada medición, de la regla más grave a la más leve. Los valores salen de config.json.</span>
+    </div>
+    <div class="rules" id="rules"></div>
+  </section>
+  </div>
+
+  <div class="stack" id="vistaHist" hidden>
+    <section class="card">
+      <div class="section-head">
+        <h2 id="histTitle">Resumen por mes</h2>
+        <span class="muted" style="font-size:14px">Disponibilidad = porcentaje de mediciones en que la base de datos respondió. Tiempo con fallas = tiempo en Degradándose, Lento o Sin respuesta.</span>
+      </div>
+      <div class="tbl-wrap"><table class="mes"><thead><tr><th>Mes</th><th>Disponibilidad</th><th>Incidentes</th><th>De ellos, sin respuesta</th><th>Tiempo con fallas</th><th>Día más afectado</th></tr></thead><tbody id="mesBody"></tbody></table></div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>Mes por día</h2>
+        <span class="muted" style="font-size:14px">Cada fila es un mes y cada columna un día del mes. Si los fines de mes fallan, se ve una mancha en las últimas columnas de las tres filas.</span>
+      </div>
+      <div class="hist-grid-wrap"><div class="cal" id="cal"></div></div>
+      <div class="cal-legend"><span><b class="d-good"></b>Normal todo el día</span><span><b class="d-warn"></b>Hubo degradación</span><span><b class="d-serious"></b>Hubo lentitud</span><span><b class="d-crit"></b>Hubo caída</span><span><b class="d-none"></b>Sin mediciones</span></div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>Día de la semana × hora</h2>
+        <span class="muted" style="font-size:14px">Porcentaje del tiempo con fallas en cada hora, sumando los 3 meses. Una celda oscura que se repite marca una hora problemática (por ejemplo, lunes a las 10).</span>
+      </div>
+      <div class="hist-grid-wrap"><div class="wk" id="wk"></div></div>
+      <div class="scale">0%<i></i><span id="wkMax">–</span></div>
+    </section>
+  </div>
+</div>
+<div class="tip" id="htip" hidden></div>
+
+<script>
+(function(){
+const MAP={normal:'good',degradando:'warn',lento:'serious',caido:'crit',sin_datos:'none'};
+const LBL={good:'Normal',warn:'Degradándose',serious:'Lento',crit:'Sin respuesta',none:'Sin datos'};
+// Nombres técnicos que usaban las primeras versiones: así los incidentes viejos también se leen en lenguaje de la asesora
+const ANTES={'Datos de usuario':'get_user_data','Sesión de usuario':'get_user_session_data','Configuración':'get_settings','Barra del agente':'voz_barra','Red hacia el servidor de voz':'voz_red','Módulo de chat y WhatsApp':'wa_modulo','Página de MAS':'web','Inicio de sesión':'login','Clientes (consulta pesada)':'get_clients'};
+const NOTAN={warn:'Pantallas algo más lentas; la mayoría todavía no lo nota.',serious:'Pantallas que tardan en cargar; las asesoras sí lo notan.',crit:'MAS no carga: no se puede trabajar.',good:'Sin impacto.',none:'–'};
+const BIG={good:'Todo normal',warn:'Degradándose',serious:'Lento',crit:'Sin respuesta',none:'Sin datos'};
+const ICO={good:'✓',warn:'↗',serious:'!',crit:'✕',none:'–'};
+const CAP=5000;
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+let DATA=null, active=null, hoverI=null, geo=null, timer=null;
+let vista='vivo'; try{if(localStorage.getItem('monitor-vista')==='hist') vista='hist';}catch(e){}
+const fmtPct=x=>x==null?'–':(x>=99.995?'100':x.toFixed(2).replace(/0$/,''))+'%';
+const fmtMin=m=>m<60?m+' min':Math.floor(m/60)+' h '+(m%60?m%60+' min':'');
+const RANGOS=[['3h','3 horas',3*3600],['6h','6 horas',6*3600],['12h','12 horas',12*3600],['24h','24 horas',86400],['7d','7 días',7*86400],['mes','Lo que va del mes',0]];
+const RLBL=Object.fromEntries(RANGOS.map(r=>[r[0],r[1]]));
+let rango='6h'; try{const r=localStorage.getItem('monitor-rango'); if(RLBL[r]) rango=r;}catch(e){}
+let arrastrando=false; // mientras se arrastra, no se redibuja la gráfica (si no, se perdería la selección)
+let zoom=null; // tramo ampliado: {alianza, desde, hasta, bloque, agrupado, serie, cargando}
+function bloqueTxt(seg){return seg<3600?Math.round(seg/60)+' min':(seg<86400?Math.round(seg/3600)+' h':Math.round(seg/86400)+' d');}
+function fmtX(ts,span){const d=tdate(ts),dd=pad(d.getDate())+'/'+pad(d.getMonth()+1);return span<=26*3600?hm(ts):span<=8*86400?dd+' '+pad(d.getHours())+'h':dd;}
+/* Qué tramo se dibuja: el zoom si hay uno; si no, el rango elegido.
+   3, 6, 12 y 24 h salen de la misma serie de 24 h (cada medición), recortada en el navegador. */
+function vistaActual(a){
+  if(zoom&&zoom.alianza===a.id) return zoom;
+  if(rango==='7d'||rango==='mes') return a.rangos[rango];
+  const R=a.rangos['24h'], dur=RANGOS.find(r=>r[0]===rango)[2], desde=R.hasta-dur;
+  return {desde,hasta:R.hasta,bloque:R.bloque,agrupado:false,serie:R.serie.filter(p=>p.ts>=desde)};
+}
+function nombreVista(V){return zoom?`${dm(V.desde)} – ${dm(V.hasta)}`:(rango==='mes'?'lo que va del mes':'las últimas '+RLBL[rango]);}
+async function hacerZoom(a,desde,hasta){
+  if(hasta-desde<1800){const c=(desde+hasta)/2;desde=c-900;hasta=c+900;}
+  zoom={alianza:a.id,desde,hasta,bloque:60,agrupado:false,serie:[],cargando:true}; hoverI=null; $('tip').hidden=true; render();
+  try{
+    if(SRC==='local'){
+      const r=await fetch(`api/detalle?alianza=${encodeURIComponent(a.id)}&desde=${desde}&hasta=${hasta}`); if(!r.ok) throw new Error(r.status);
+      zoom=Object.assign(await r.json(),{alianza:a.id});
+    }else{
+      // Publicado en GitHub no hay monitor a quien pedir detalle: se usa la serie más fina que cubra el tramo.
+      const f=[a.rangos['24h'],a.rangos['7d'],a.rangos['mes']].find(f=>f.desde<=desde)||a.rangos['mes'];
+      zoom={alianza:a.id,desde,hasta,bloque:f.bloque,agrupado:f.agrupado,serie:f.serie.filter(p=>p.ts+(f.agrupado?f.bloque:0)>=desde&&p.ts<=hasta)};
+    }
+  }catch(e){zoom=null;}
+  render();
+}
+const tdate=ts=>new Date(ts*1000);
+const hm=ts=>{const d=tdate(ts);return pad(d.getHours())+':'+pad(d.getMinutes())+(DATA&&DATA.intervalo<60?':'+pad(d.getSeconds()):'');};
+const dm=ts=>{const d=tdate(ts);return pad(d.getDate())+'/'+pad(d.getMonth()+1)+' '+hm(ts);};
+const fmtMs=x=>x==null?'sin resp.':(x>=1000?(x/1000).toFixed(x>=10000?0:1)+' s':Math.round(x)+' ms');
+const pill=s=>`<span class="pill s-${s}"><i>${ICO[s]}</i>${LBL[s]}</span>`;
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const median=a=>{if(!a.length)return null;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+const A=()=>DATA.alianzas.find(a=>a.id===active)||DATA.alianzas[0];
+
+/* De dónde vienen los datos:
+   - "local":  el tablero lo sirve el propio monitor (http://PC:8080) -> pregunta a /api/estado
+   - "remoto": el tablero está publicado en GitHub Pages -> lee estado.json de la rama "datos" */
+let SRC=null;
+function repoRemoto(){
+  const m=document.querySelector('meta[name="monitor-repo"]'); let repo=m&&m.content.trim();
+  if(!repo&&location.hostname.endsWith('.github.io')){const seg=location.pathname.split('/').filter(Boolean)[0];if(seg)repo=location.hostname.split('.')[0]+'/'+seg;}
+  const rama=((document.querySelector('meta[name="monitor-rama"]')||{}).content||'datos').trim();
+  return {repo,rama};
+}
+async function obtener(){
+  if(SRC!=='remoto'){
+    try{const r=await fetch('api/estado',{cache:'no-store'});if(r.ok){SRC='local';return await r.json();}}catch(e){}
+    if(SRC==='local') throw new Error('El monitor no responde');
+  }
+  const {repo,rama}=repoRemoto(); if(!repo) throw new Error('No se sabe de qué repositorio leer los datos');
+  SRC='remoto';
+  try{const r=await fetch(`https://api.github.com/repos/${repo}/contents/estado.json?ref=${encodeURIComponent(rama)}`,{headers:{Accept:'application/vnd.github.raw+json'},cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
+  const r=await fetch(`https://raw.githubusercontent.com/${repo}/${encodeURIComponent(rama)}/estado.json?t=${Date.now()}`,{cache:'no-store'});
+  if(!r.ok) throw new Error('No se pudieron leer los datos publicados');
+  return await r.json();
+}
+function minutos(seg){return seg<90?Math.round(seg)+' s':Math.round(seg/60)+' min';}
+async function load(){
+  try{
+    DATA=await obtener();
+    if(!active||!DATA.alianzas.some(a=>a.id===active)) active=DATA.alianzas[0].id;
+    const edad=DATA.publicado_ts?Date.now()/1000-DATA.publicado_ts:0;
+    const viejo=SRC==='remoto'&&edad>Math.max(600,DATA.intervalo*4);
+    $('offline').hidden=!viejo;
+    if(viejo) $('offline').textContent=`Los datos tienen ${minutos(edad)} de antigüedad: el PC del monitor puede estar apagado, suspendido o sin internet.`;
+  }catch(e){
+    $('offline').hidden=false;
+    $('offline').textContent=SRC==='remoto'?`No se pudieron leer los datos publicados en GitHub (${e.message}).`:'No hay conexión con el monitor. Revisa que la ventana del monitor siga abierta en el PC donde corre.';
+    clearTimeout(timer); timer=setTimeout(load,15000); return;
+  }
+  // Separado del bloque anterior: un error de dibujo no debe confundirse con "no hay conexión".
+  try{ render(); }catch(e){ console.error('Error dibujando el tablero:',e); }
+  clearTimeout(timer);
+  timer=setTimeout(load, SRC==='remoto'?60000:((DATA&&DATA.intervalo<10)?3000:15000));
+}
+
+function renderTabs(){
+  $('tabs').innerHTML=DATA.alianzas.map(a=>{
+    const s=MAP[a.estado];
+    return `<button class="tab" role="tab" data-k="${a.id}" aria-selected="${a.id===active}"><span><span class="tab-name">${esc(a.nombre)}</span><span class="tab-sub">${a.modo==='demo'?'Modo demo · datos simulados':'Medición real'}</span></span><span class="tab-meta">${enPausa(a)?pillPausa:pill(s)}<span class="tab-ms">${a.mediana!=null?fmtMs(a.mediana):'–'}</span></span></button>`;
+  }).join('');
+  $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=()=>{active=b.dataset.k;zoom=null;hoverI=null;$('tip').hidden=true;render();});
+  if(DATA.horario&&!DATA.horario.en_horario&&DATA.alianzas.every(enPausa)){$('cross').innerHTML=`<b>Fuera del horario de medición.</b> ${esc(DATA.horario.reanuda)}.`;return;}
+  const medidas=DATA.alianzas.filter(a=>a.estado!=='sin_datos');
+  const bad=medidas.filter(a=>a.estado!=='normal'), ok=medidas.filter(a=>a.estado==='normal');
+  let t;
+  if(medidas.length<2) t='<b>Diagnóstico cruzado no disponible:</b> se necesitan las dos alianzas midiendo.';
+  else if(!bad.length) t='<b>Todas las alianzas operan normal.</b>';
+  else if(ok.length) t=`<b>Solo ${bad.map(a=>esc(a.nombre)).join(', ')} presenta fallas; ${ok.map(a=>esc(a.nombre)).join(', ')} opera normal.</b> Como todas salen por la misma red, el problema está en el servidor de InConcert de ${bad.map(a=>esc(a.nombre)).join(', ')}, no en nuestra red.`;
+  else t='<b>Todas las alianzas fallan al mismo tiempo.</b> Revisar primero nuestra red (firewall, canales ETB e IFX). Si está bien, es una falla general de InConcert.';
+  $('cross').innerHTML=t;
+}
+
+function render(){
+  renderTabs();
+  const a=A(), u=DATA.umbrales, s=MAP[a.estado];
+  const demoAll=DATA.alianzas.every(x=>x.modo==='demo'), realAll=DATA.alianzas.every(x=>x.modo!=='demo');
+  $('modeBadge').textContent=demoAll?'Modo demo · datos simulados':realAll?'Medición real':'Mixto: real y demo';
+  $('modeBadge').className='mode'+(realAll?' real':'');
+  $('modeBadge').hidden=realAll; // en medición real no se muestra: solo avisa cuando hay datos simulados
+  if(SRC==='remoto'&&DATA.publicado_ts) $('modeBadge').textContent+=' · publicado '+hm(DATA.publicado_ts);
+  $('clock').textContent=a.ultima_ts?hm(a.ultima_ts):'--:--';
+  // banner
+  $('banner').dataset.s=s;
+  $('bigState').innerHTML=`<span class="ico s-${s}">${ICO[s]}</span>${esc(a.nombre)}: ${BIG[s]}`;
+  const med=a.mediana, base=a.base, pct=(med&&base)?Math.round((med/base-1)*100):null;
+  const web=a.sondas.find(x=>x.id==='web'); const webOk=web&&web.estado==='normal';
+  const txt={
+    good:`La base de datos responde en <b class="mono">${fmtMs(med)}</b>, dentro de su rango habitual (<span class="mono">${fmtMs(base)}</span>).`,
+    warn:`Los tiempos subieron <b class="mono">${pct>0?'+':''}${pct}%</b> sobre lo normal en las últimas mediciones. Todavía funciona, pero algo está cambiando.`,
+    serious:`La mediana reciente es <b class="mono">${fmtMs(med)}</b>${!base?'':(med<base*1.3?', igual a su nivel habitual: <b>lentitud sostenida</b>, no un empeoramiento de hoy':', '+(med/base).toFixed(1)+' veces su nivel habitual: <b>está empeorando</b>')}. Las asesoras ya lo notan.`,
+    crit:`Las consultas a la base de datos no responden o tardan más de ${fmtMs(u.critico_ms)} en las últimas 2 mediciones.`,
+    none:'Aún no hay mediciones de la base de datos para esta alianza. Falta configurar el usuario de monitoreo o las rutas de los servicios.'
+  }[s];
+  const act={good:'Sin acciones pendientes.',warn:'Acción: vigilar la tendencia y avisar al equipo de TI.',serious:'Acción: avisar a coordinadores y abrir caso preventivo con InConcert.',crit:'Acción: escalar a InConcert con esta gráfica y activar el plan de contingencia.',none:''}[s]
+    +((s==='warn'||s==='serious'||s==='crit')&&webOk?' La página web responde normal: el problema está en la base de datos.':'');
+  $('bannerText').innerHTML=txt; $('bannerAction').textContent=act;
+  if(enPausa(a)){
+    $('banner').dataset.s='none';
+    $('bigState').innerHTML=`<span class="ico s-none">⏸</span>${esc(a.nombre)}: en pausa`;
+    $('bannerText').innerHTML=`Fuera del horario de medición. ${esc(DATA.horario.reanuda)}.`;
+    $('bannerAction').textContent='Lo que ves abajo es la última jornada medida. No se envían alertas fuera de horario.';
+  }
+  // demo controls
+  $('demoControls').hidden=a.modo!=='demo'||SRC!=='local'; $('scName').textContent=a.nombre;
+  document.querySelectorAll('#demoControls .seg button').forEach(b=>{b.setAttribute('aria-pressed',b.dataset.sc===a.escenario?'true':'false');b.onclick=()=>simular(a.id,b.dataset.sc);});
+  // stats
+  $('stBase').textContent=base?fmtMs(base):'–'; $('stMed').textContent=med!=null?fmtMs(med):'–';
+  $('stVar').textContent=pct==null?'–':pct>=200?'×'+(med/base).toFixed(1)+' lo normal':(pct>0?'+':'')+pct+'%';
+  const R=vistaActual(a);
+  const mesAct=a.historico.meses[a.historico.meses.length-1];
+  $('stAvK').textContent='Disponibilidad '+mesAct.nombre;
+  $('stAv').textContent=fmtPct(mesAct.disponibilidad);
+  document.querySelectorAll('#rangeSel button').forEach(b=>{b.setAttribute('aria-pressed',!zoom&&b.dataset.r===rango?'true':'false');b.onclick=()=>{rango=b.dataset.r;zoom=null;hoverI=null;$('tip').hidden=true;try{localStorage.setItem('monitor-rango',rango);}catch(e){}render();};});
+  $('zoomBar').hidden=!zoom; if(zoom){$('zoomTxt').textContent='Detalle: '+nombreVista(R);$('zoomBack').onclick=()=>{zoom=null;hoverI=null;$('tip').hidden=true;render();};}
+  $('rangeNote').textContent=R.agrupado?`Cada punto resume ${bloqueTxt(R.bloque)}. Clic en un punto o arrastra sobre la gráfica para ver el detalle.`:'Cada punto es una medición. Arrastra sobre la gráfica para ampliar un tramo.';
+  $('lgLento').textContent=fmtMs(u.lento_ms)+': lento'; $('lgCrit').textContent=fmtMs(u.critico_ms)+': crítico';
+  $('mainSub').textContent=`Tiempo de respuesta de las consultas que leen la base de datos · ${nombreVista(R)}`;
+  if(!arrastrando) drawECG(a);
+  // bd chips
+  const valTxt=p=>!p.ultimo?'–':p.ultimo.detalle==='pendiente'?'Pendiente':fmtMs(p.ultimo.ms);
+  $('dbServices').innerHTML=a.sondas.filter(p=>p.grupo==='bd').map(p=>{
+    const st=MAP[p.estado]; const pend=p.ultimo&&p.ultimo.detalle==='pendiente';
+    const d=(p.base&&p.ultimo&&p.ultimo.ms!=null)?Math.round((p.ultimo.ms/p.base-1)*100):null;
+    const sub=pend?esc((p.ultimo.extra&&p.ultimo.extra.motivo)||'Pendiente de configurar'):!p.ultimo?'Sin mediciones':p.ultimo.ms==null?esc(p.ultimo.detalle):d!=null?`${d>0?'+':''}${d}% vs. normal (${fmtMs(p.base)})`:esc(p.ultimo.detalle);
+    return `<div class="svc" title="${esc(p.impacto||'')}"><div class="svc-top"><span class="svc-name">${esc(p.nombre)}</span>${pill(st)}</div><span class="svc-id">${esc(p.id)}</span><span class="svc-val">${valTxt(p)}</span><span class="svc-delta">${sub}</span></div>`;
+  }).join('');
+  // canales
+  const canal=(g,titulo,desc)=>{
+    const ps=a.sondas.filter(p=>p.grupo===g); if(!ps.length) return '';
+    const worst=ps.map(p=>p.estado).filter(e=>e!=='sin_datos').sort((x,y)=>rank(y)-rank(x))[0]||'sin_datos';
+    return `<div class="card chan"><div class="chan-head"><div><h3>${titulo}</h3><span class="muted" style="font-size:13px">${desc}</span></div>${pill(MAP[worst])}</div>${ps.map(p=>{
+      const ex=(p.ultimo&&p.ultimo.extra)||{}; const pend=p.ultimo&&p.ultimo.detalle==='pendiente';
+      const d=pend?esc((p.ultimo.extra&&p.ultimo.extra.motivo)||'Pendiente de configurar'):('perdida_pct' in ex)?`Jitter ${ex.jitter_ms} ms · pérdida ${ex.perdida_pct}%`:p.ultimo?esc(p.ultimo.detalle):'Sin mediciones';
+      return `<div class="chan-row"><span class="n" title="${esc(p.impacto||'')}">${esc(p.nombre)}<span class="svc-id">${esc(p.id)}</span></span><span class="val">${valTxt(p)}</span><span class="d">${d}</span><span>${pill(MAP[p.estado])}</span>${spark(p.serie,p.base)}</div>`;}).join('')}</div>`;
+  };
+  $('channels').innerHTML=canal('voz','Voz','Llamadas: que la barra abra y que el audio llegue bien')+canal('whatsapp','WhatsApp','Recibir y responder mensajes');
+  // complementarios
+  $('compGrid').innerHTML=a.sondas.filter(p=>p.grupo==='complementario').map(p=>{
+    const pend=p.ultimo&&p.ultimo.detalle==='pendiente';
+    return `<div class="card comp" title="${esc(p.impacto||'')}"><div class="comp-row"><h3>${esc(p.nombre)}<span class="svc-id">${esc(p.id)}</span></h3>${pill(MAP[p.estado])}</div><span class="desc">${pend?esc((p.ultimo.extra&&p.ultimo.extra.motivo)||'pendiente de configurar'):esc(p.ultimo?p.ultimo.detalle:'sin mediciones')}</span><span class="val">${valTxt(p)}</span>${spark(p.serie,p.base)}</div>`;
+  }).join('');
+  // incidentes
+  const last=a.ultima_ts||Date.now()/1000;
+  const incs=a.incidentes.filter(r=>(r.fin||last)>=R.desde&&r.inicio<=R.hasta);
+  $('incBody').innerHTML=incs.length?incs.map(r=>{
+    const dur=Math.round(((r.fin||last)-r.inicio)/60);
+    const lead=r.primer_critico?Math.round((r.primer_critico-r.primer_aviso)/60):null;
+    const leadTxt=r.primer_critico?(lead>0?`<span class="lead">${lead} min antes</span> de quedar sin respuesta`:'Ninguno: fue una caída súbita'):'No llegó a caerse';
+    return `<tr><td class="mono">${dm(r.inicio)}</td><td class="mono">${r.fin?hm(r.fin):'<b>En curso</b>'}</td><td class="mono">${dur} min</td><td>${pill(MAP[r.peor])}</td><td class="notan">${NOTAN[MAP[r.peor]]||'–'}</td><td class="mono">${r.pico>=CAP?'sin resp.':fmtMs(r.pico)}</td><td>${leadTxt}</td><td class="afect-col">${r.servicios.map(n=>{n=ANTES[n]&&a.sondas.find(x=>x.id===ANTES[n])?a.sondas.find(x=>x.id===ANTES[n]).nombre:n;const sp=a.sondas.find(x=>x.nombre===n);return `<span class="afect">${esc(n)}${sp?`<span class="svc-id">${esc(sp.id)}</span>`:''}</span>`;}).join('')||'–'}</td></tr>`;
+  }).join(''):`<tr><td colspan="8" class="empty">Sin incidentes de ${esc(a.nombre)} en ${nombreVista(R)}.</td></tr>`;
+  // reglas
+  $('rules').innerHTML=[
+    ['crit',`Las 2 últimas mediciones no respondieron o pasaron de ${fmtMs(u.critico_ms)}.`,'Escalar a InConcert con la gráfica y activar la contingencia.'],
+    ['serious',`La mediana de las últimas ${u.mediciones_para_mediana} mediciones pasa de ${fmtMs(u.lento_ms)}.`,'Avisar a coordinadores y abrir caso preventivo.'],
+    ['warn',`La mediana está ${u.degradacion_pct}% o más por encima de lo normal aprendido.`,'Vigilar y avisar a TI. Aún funciona, pero algo está cambiando.'],
+    ['good','Tiempos dentro del rango habitual. Un pico aislado no dispara alarmas.','Nada que hacer.']
+  ].map(([k,p,act])=>`<div class="rule">${pill(k)}<p>${p}</p><span class="act">${act}</span></div>`).join('');
+  renderVista(a);
+}
+function renderVista(a){
+  $('vistaVivo').hidden=vista!=='vivo'; $('vistaHist').hidden=vista!=='hist';
+  document.querySelectorAll('#viewSel button').forEach(b=>{b.setAttribute('aria-pressed',b.dataset.v===vista?'true':'false');b.onclick=()=>{vista=b.dataset.v;try{localStorage.setItem('monitor-vista',vista);}catch(e){}$('htip').hidden=true;render();};});
+  if(vista==='hist') renderHist(a);
+}
+const DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+const DCORTO=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+function renderHist(a){
+  const H=a.historico; const cap=t=>t[0].toUpperCase()+t.slice(1);
+  $('histTitle').textContent=`Resumen por mes · ${a.nombre}`;
+  $('mesBody').innerHTML=H.meses.slice().reverse().map(m=>`<tr><td><b>${cap(m.nombre)} ${m.anio}</b>${m.actual?' <span class="muted">(en curso)</span>':''}</td><td class="n">${fmtPct(m.disponibilidad)}</td><td class="n">${m.incidentes}</td><td class="n">${m.caidas}</td><td class="n">${fmtMin(m.minutos_falla)}</td><td class="n">${m.peor_dia?m.peor_dia+' de '+m.nombre:'–'}</td></tr>`).join('');
+  // calendario: meses × días
+  const hoy=new Date(); let c='<span></span>'+Array.from({length:31},(_,i)=>`<span class="hd">${i+1}</span>`).join('');
+  H.meses.forEach(m=>{
+    c+=`<span class="lbl">${cap(m.nombre).slice(0,3)} ${String(m.anio).slice(2)}</span>`;
+    for(let d=1;d<=31;d++){
+      if(d>m.dias.length){c+='<span class="c d-out"></span>';continue;}
+      const x=m.dias[d-1], esHoy=m.actual&&d===hoy.getDate();
+      if(!x&&m.actual&&d>hoy.getDate()){c+='<span class="c"></span>';continue;}
+      if(!x){c+=`<span class="c d-none${esHoy?' hoy':''}" data-tip="${d} de ${m.nombre}|Sin mediciones"></span>`;continue;}
+      const st=MAP[x.estado];
+      const t0=new Date(m.anio,m.mes-1,d).getTime()/1000;
+      c+=`<span class="c d-${st}${esHoy?' hoy':''}" data-dia="${t0}" data-tip="${d} de ${m.nombre}|${LBL[st]}|Disponibilidad ${fmtPct(x.disponibilidad)}|Tiempo con fallas ${fmtMin(x.minutos_falla)}|Mediana ${fmtMs(x.mediana)}|Clic para ver el día en detalle"></span>`;
+    }
+  });
+  $('cal').innerHTML=c;
+  $('cal').onclick=ev=>{const t=ev.target.closest('[data-dia]');if(!t)return;const t0=+t.dataset.dia;vista='vivo';try{localStorage.setItem('monitor-vista',vista);}catch(e){}$('htip').hidden=true;hacerZoom(a,t0,t0+86400);scrollTo({top:$('chart').getBoundingClientRect().top+scrollY-140,behavior:'smooth'});};
+  // semana × hora
+  let mx=0; H.semana.forEach(f=>f.forEach(x=>{if(x.pct_falla>mx)mx=x.pct_falla;}));
+  let w='<span></span>'+Array.from({length:24},(_,h)=>`<span class="hd">${h%3===0?h:''}</span>`).join('');
+  H.semana.forEach((fila,di)=>{
+    w+=`<span class="lbl">${DCORTO[di]}</span>`;
+    fila.forEach((x,h)=>{const o=(x.pct_falla&&mx)?(0.12+0.88*x.pct_falla/mx):0;
+      w+=`<span class="w" style="--o:${o.toFixed(2)}" data-tip="${DIAS[di]} ${pad(h)}:00–${pad(h)}:59|${x.n?x.pct_falla+'% del tiempo con fallas':'Sin mediciones'}${x.mediana?'|Mediana '+fmtMs(x.mediana):''}"></span>`;});
+  });
+  $('wk').innerHTML=w; $('wkMax').textContent=mx?mx+'% (la hora más afectada)':'sin fallas';
+}
+document.addEventListener('mouseover',ev=>{const t=ev.target.closest&&ev.target.closest('[data-tip]');const tip=$('htip');
+  if(!t){tip.hidden=true;return;} const p=t.dataset.tip.split('|');
+  tip.innerHTML=`<b>${esc(p[0])}</b>`+p.slice(1).map(x=>`<div>${esc(x)}</div>`).join(''); tip.hidden=false;
+  const r=t.getBoundingClientRect(); let left=r.right+8; if(left+tip.offsetWidth>innerWidth-8) left=r.left-tip.offsetWidth-8;
+  tip.style.left=Math.max(8,left)+'px'; tip.style.top=Math.max(8,r.top-8)+'px';});
+const enPausa=a=>DATA&&DATA.horario&&!DATA.horario.en_horario&&a.modo!=='demo';
+const pillPausa='<span class="pill s-none"><i>⏸</i>En pausa</span>';
+const rank=e=>({sin_datos:-1,normal:0,degradando:1,lento:2,caido:3}[e]);
+
+async function simular(id,sc){
+  try{await fetch('/api/simular',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({alianza:id,escenario:sc})});}catch(e){}
+  load();
+}
+
+function spark(series,base){
+  const W=200,H=38,P=4; series=series||[]; const vals=series.filter(x=>x!=null);
+  if(!vals.length) return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"></svg>`;
+  const max=Math.max((base||median(vals))*3,...vals); const n=series.length;
+  const X=i=>P+i*(W-2*P)/Math.max(1,n-1), Y=x=>H-P-(Math.min(x,max)/max)*(H-2*P);
+  let d='',pen=false; series.forEach((x,i)=>{if(x==null){pen=false;return;}d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(x).toFixed(1);pen=true;});
+  const dots=series.map((x,i)=>x==null?`<circle cx="${X(i)}" cy="${P+1}" r="2.6" fill="var(--crit)"/>`:'').join('');
+  const li=n-1,lx=series[li];
+  const end=lx==null?'':`<circle cx="${X(li)}" cy="${Y(lx)}" r="3" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.5"/>`;
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>${dots}${end}</svg>`;
+}
+
+function drawECG(a){
+  const V=vistaActual(a), pts=V.serie, u=DATA.umbrales, base=a.base||300, agr=V.agrupado;
+  const span=Math.max(60,V.hasta-V.desde);
+  $('lgMax').hidden=!agr; $('lgLine').textContent=agr?'Mediana del bloque':'Peor respuesta del grupo';
+  const svg=$('ecg'); const W=Math.max(300,$('chart').clientWidth); const H=W<560?250:310;
+  const M={l:50,r:14,t:30,b:34}; const pw=W-M.l-M.r;
+  const lane=M.t-14, yTop=M.t+6, yBot=H-M.b-12, stripY=H-M.b-6;
+  const lo=Math.log(80),hi=Math.log(3000);
+  const Y=x=>yBot-(Math.log(Math.min(Math.max(x,80),3000))-lo)/(hi-lo)*(yBot-yTop);
+  const X=ts=>M.l+(ts-V.desde)/span*pw, T=x=>V.desde+(x-M.l)/pw*span;
+  const px=p=>X(agr?p.ts+V.bloque/2:p.ts);  // en bloques, el punto va en la mitad del bloque
+  geo={X:k=>px(pts[k]),W,H,V};
+  let g='';
+  [100,200,500,1000,2000].forEach(tk=>{g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${Y(tk)}" y2="${Y(tk)}" stroke="var(--grid)"/><text x="${M.l-8}" y="${Y(tk)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">${tk>=1000?tk/1000+' s':tk}</text>`;});
+  g+=`<text x="${M.l-8}" y="${lane+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">sin resp.</text><line x1="${M.l}" x2="${W-M.r}" y1="${lane}" y2="${lane}" stroke="var(--grid)" stroke-dasharray="2 4"/>`;
+  if(a.base) g+=`<rect x="${M.l}" width="${pw}" y="${Y(base*1.3)}" height="${Y(base*.7)-Y(base*1.3)}" fill="var(--band)"/>`;
+  g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${Y(u.lento_ms)}" y2="${Y(u.lento_ms)}" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="6 5"/><text x="${W-M.r-4}" y="${Y(u.lento_ms)-6}" text-anchor="end" font-size="11.5" fill="var(--muted)">${fmtMs(u.lento_ms)} · lento</text>`;
+  g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${Y(u.critico_ms)}" y2="${Y(u.critico_ms)}" stroke="var(--crit)" stroke-width="1.5" stroke-dasharray="6 5"/><text x="${W-M.r-4}" y="${Y(u.critico_ms)-6}" text-anchor="end" font-size="11.5" fill="var(--muted)">${fmtMs(u.critico_ms)} · crítico</text>`;
+  const nt=W<560?2:5; for(let k=0;k<=nt;k++){const ts=V.desde+k*span/nt, x=X(ts); g+=`<text x="${x}" y="${H-10}" text-anchor="${k===0?'start':k===nt?'end':'middle'}" font-size="11" fill="var(--muted)" font-family="var(--mono)">${fmtX(ts,span)}</text><line x1="${x}" x2="${x}" y1="${stripY+6}" y2="${stripY+10}" stroke="var(--muted)"/>`;}
+  const fin=(msg)=>{svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('height',H);svg.innerHTML=g+`<text x="${M.l+pw/2}" y="${H/2}" text-anchor="middle" font-size="14" fill="var(--muted)">${msg}</text>`;};
+  if(zoom&&zoom.cargando) return fin('Cargando el detalle…');
+  if(!pts.length) return fin('Sin mediciones en este tramo');
+  const cw=Math.max(1.2,(agr?V.bloque:V.bloque)/span*pw); const col={good:'var(--good)',warn:'var(--warn)',serious:'var(--serious)',crit:'var(--crit)',none:'var(--grid)'};
+  pts.forEach(p=>{const st=MAP[p.estado],x0=agr?X(p.ts):X(p.ts)-cw/2;g+=`<rect x="${x0.toFixed(1)}" y="${stripY}" width="${(cw+.3).toFixed(1)}" height="6" fill="${col[st]}" opacity="${st==='good'?.35:.95}"/>`;});
+  const linea=campo=>{let d='',prev=null;pts.forEach(p=>{if(p[campo]==null){prev=null;return;}d+=(prev!==null&&p.ts-prev<=V.bloque*2.5?'L':'M')+px(p).toFixed(1)+' '+Y(p[campo]).toFixed(1);prev=p.ts;});return d;};
+  if(agr) g+=`<path d="${linea('max')}" fill="none" stroke="var(--accent)" stroke-opacity=".35" stroke-width="1.2" stroke-linejoin="round"/>`;
+  g+=`<path d="${linea('med')}" fill="none" stroke="var(--accent)" stroke-width="${pts.length>400?1.5:2}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  pts.forEach(p=>{if(p.fallos>0){const r=agr?2.5+3*p.fallos/p.n:3.5;g+=`<circle cx="${px(p).toFixed(1)}" cy="${lane}" r="${r.toFixed(1)}" fill="var(--crit)" stroke="var(--surface)" stroke-width="1.5"/>`;}});
+  const lh=pts[pts.length-1];
+  if(!zoom&&lh.estado!=='sin_datos'){const ly=lh.med==null?lane:Y(lh.med),lc=lh.med==null?'var(--crit)':'var(--accent)';
+    g+=`<circle class="pulse" cx="${px(lh)}" cy="${ly}" r="4" fill="none" stroke="${lc}" stroke-width="2"/><circle cx="${px(lh)}" cy="${ly}" r="4.5" fill="${lc}" stroke="var(--surface)" stroke-width="2"/>`;}
+  g+=`<rect id="sel" y="${lane-8}" height="${stripY+14-lane}" fill="var(--accent)" fill-opacity=".12" stroke="var(--accent)" stroke-opacity=".5" visibility="hidden"/>`;
+  g+=`<line id="xh" x1="0" x2="0" y1="${lane-8}" y2="${stripY+6}" stroke="var(--muted)" visibility="hidden"/><rect id="hit" x="${M.l}" y="0" width="${pw}" height="${H}" fill="transparent"/>`;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('height',H); svg.innerHTML=g;
+  // --- interacción: pasar el mouse = detalle; arrastrar = ampliar tramo; clic en un bloque = ver sus 6 h
+  const hit=svg.querySelector('#hit'), sel=svg.querySelector('#sel');
+  const sx=ev=>{const r=svg.getBoundingClientRect();return Math.min(W-M.r,Math.max(M.l,(ev.clientX-r.left)*(W/r.width)));};
+  const cercano=x=>{let b=0,bd=1e9;pts.forEach((p,k)=>{const dd=Math.abs(px(p)-x);if(dd<bd){bd=dd;b=k;}});return b;};
+  let x0=null;
+  hit.addEventListener('pointerdown',ev=>{x0=sx(ev);arrastrando=true;hit.setPointerCapture(ev.pointerId);});
+  hit.addEventListener('pointermove',ev=>{const x=sx(ev);
+    if(x0!==null&&Math.abs(x-x0)>4){sel.setAttribute('x',Math.min(x,x0));sel.setAttribute('width',Math.abs(x-x0));sel.setAttribute('visibility','visible');$('tip').hidden=true;return;}
+    hoverI=cercano(x);showTip(hoverI);});
+  hit.addEventListener('pointerup',ev=>{const x=sx(ev);const desde=x0;x0=null;arrastrando=false;sel.setAttribute('visibility','hidden');
+    if(desde===null) return;
+    if(Math.abs(x-desde)>8) return hacerZoom(a,T(Math.min(x,desde)),T(Math.max(x,desde)));
+    if(agr){const p=pts[cercano(x)],c=p.ts+V.bloque/2;hacerZoom(a,c-3*3600,c+3*3600);}});
+  hit.addEventListener('pointerleave',()=>{if(x0===null){$('tip').hidden=true;svg.querySelector('#xh').setAttribute('visibility','hidden');hoverI=null;}});
+  if(hoverI!==null&&hoverI<pts.length) showTip(hoverI);
+}
+function showTip(k){
+  const V=geo.V, h=V.serie[k]; if(!h) return; const svg=$('ecg'); const xh=svg.querySelector('#xh');
+  const x=geo.X(k); xh.setAttribute('x1',x); xh.setAttribute('x2',x); xh.setAttribute('visibility','visible');
+  const agr=V.agrupado, cuando=agr?`${dm(h.ts)} – ${hm(h.ts+V.bloque)}`:dm(h.ts);
+  const filas=h.estado==='sin_datos'?'<tr><td>Sin datos</td><td>–</td></tr>':agr
+    ?`<tr><td>Mediana</td><td><b>${fmtMs(h.med)}</b></td></tr><tr><td>Valor más alto</td><td>${fmtMs(h.max)}</td></tr><tr><td>Sin respuesta</td><td>${h.fallos} de ${h.n}</td></tr>`
+    :`<tr><td>Peor tiempo de BD</td><td><b>${h.fallos?'sin resp.':fmtMs(h.med)}</b></td></tr>`;
+  const tip=$('tip');
+  tip.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b class="mono">${cuando}</b>${pill(MAP[h.estado])}</div><table>${filas}</table>${agr?'<div class="muted" style="font-size:12px;margin-top:4px">Clic para ver este momento en detalle</div>':''}`;
+  tip.hidden=false;
+  const cw=$('chart').clientWidth, r=svg.getBoundingClientRect(), pxx=x*(r.width/geo.W), tw=tip.offsetWidth;
+  let left=pxx+14; if(left+tw>cw) left=pxx-tw-14; if(left<0) left=0;
+  tip.style.left=left+'px'; tip.style.top='8px';
+}
+if('ResizeObserver' in window) new ResizeObserver(()=>{if(DATA) drawECG(A());}).observe($('chart'));
+load();
+})();
+</script>
+</body>
+</html>
