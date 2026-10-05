@@ -109,6 +109,14 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .legend span{display:inline-flex;align-items:center;gap:7px}
 .sw-line{width:20px;height:2px;background:var(--accent);border-radius:2px}
 .sw-conn{width:20px;height:0;border-top:2px dashed var(--conn)}
+/* Colores por alianza (paleta categórica validada para daltonismo sobre el fondo oscuro; orden fijo, nunca rotado) */
+.sw-a{display:inline-block;width:18px;height:3px;border-radius:2px;flex:none}
+.legT button{font:inherit;color:var(--fg);background:none;border:1px solid transparent;border-radius:6px;padding:2px 6px;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.legT button:hover{border-color:var(--line)}
+.legT button[aria-pressed="false"]{opacity:.4;text-decoration:line-through}
+table.cmp tbody tr{cursor:pointer}
+table.cmp tbody tr:hover td{background:var(--surface-2)}
+.tab-todas .tab-name{font-size:18px}
 :root{--conn:#b39ddb}
 /* Red y balanceadores */
 .ruta{display:flex;flex-direction:column;gap:12px}
@@ -162,7 +170,7 @@ table.inc{border-collapse:collapse;width:100%;min-width:900px;font-size:14px}
 .foot{font-size:13px;color:var(--muted);max-width:75ch}
 
 /* pestañas por alianza */
-.tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
 @media (max-width:620px){.tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .tab{font:inherit;color:var(--fg);text-align:left;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0}
 .tab:hover{background:var(--surface-2)}
@@ -246,9 +254,9 @@ table.mes{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
    y en la gráfica solo se permite arrastrar en horizontal (el desplazamiento vertical sigue funcionando). */
 #hit{touch-action:pan-y}
 @media (max-width:620px){
-  #rangeSel{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);width:100%}
-  #rangeSel button{border-left:0!important;background:var(--surface);padding:9px 6px}
-  #rangeSel button[aria-pressed="true"]{background:var(--accent)}
+  #rangeSel,#rangeSelT{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);width:100%}
+  #rangeSel button,#rangeSelT button{border-left:0!important;background:var(--surface);padding:9px 6px}
+  #rangeSel button[aria-pressed="true"],#rangeSelT button[aria-pressed="true"]{background:var(--accent)}
   .controls .seg{flex-wrap:wrap}
   .range-row{flex-direction:column;align-items:stretch}
 }
@@ -416,6 +424,38 @@ table.mes{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
       <div class="scale">0%<i></i><span id="wkMax">–</span></div>
     </section>
   </div>
+
+  <div class="stack" id="vistaTodas" hidden>
+    <section class="card">
+      <div class="main-head">
+        <div>
+          <h2>Comparativo de alianzas</h2>
+          <div class="muted" style="font-size:14px" id="tSub">Peor tiempo de base de datos de cada alianza</div>
+        </div>
+      </div>
+      <div class="range-row"><div class="seg" id="rangeSelT" role="group" aria-label="Rango de tiempo"></div>
+        <span class="ctl-note">Clic en un nombre de la leyenda para ocultarlo o mostrarlo. Pasa el mouse para comparar en el mismo momento.</span></div>
+      <div class="chart" id="chartT"><svg id="ecgT" role="img" aria-label="Tiempo de respuesta de base de datos por alianza"></svg><div class="tip" id="tipT" hidden></div></div>
+      <div class="legend" id="legT"></div>
+      <div class="tbl-wrap" style="margin-top:14px"><table class="mes cmp"><thead><tr><th>Alianza</th><th>Servidor</th><th>Estado</th><th>Mediana reciente</th><th>Normal aprendido</th><th>Variación</th><th title="Mediciones sueltas de más del doble de lo habitual">Picos hoy</th><th>Disponibilidad del mes</th><th title="get_user_session_data">Mantener la sesión</th><th title="Tamaño de la última respuesta de get_user_session_data">Tamaño sesión</th></tr></thead><tbody id="cmpBody"></tbody></table></div>
+      <span class="muted" style="font-size:13px">Clic en una fila para abrir esa alianza.</span>
+    </section>
+    <section class="card ruta">
+      <div class="section-head">
+        <h2>Todos los nodos de los balanceadores</h2>
+        <span class="muted" style="font-size:14px">Cada servidor de InConcert entra por un balanceador de Amazon con varios nodos (IP). Aquí se suman las consultas de BD de todas las alianzas que usan cada nodo · últimas 24 h. Red (TCP) es el viaje por internet; Balanceador (TLS) incluye el trabajo del nodo al cifrar la conexión.</span>
+      </div>
+      <div class="salida" id="salidaT"></div>
+      <div class="lbs"><div><table class="lb"><thead><tr><th>Servidor</th><th>Nodo (IP)</th><th>Alianzas</th><th>Consultas</th><th>Respuesta prom.</th><th>Red (TCP)</th><th>Balanceador (TLS)</th><th>Última vez</th></tr></thead><tbody id="nodosT"></tbody></table></div></div>
+    </section>
+    <section class="card">
+      <div class="section-head">
+        <h2>Incidentes de todas las alianzas</h2>
+        <span class="muted" style="font-size:14px" id="incTSub"></span>
+      </div>
+      <div class="tbl-wrap"><table class="inc"><thead><tr><th>Alianza</th><th>Inicio</th><th>Fin</th><th>Duración</th><th>Peor estado</th><th>Qué notaron las asesoras</th><th>Pico</th></tr></thead><tbody id="incT"></tbody></table></div>
+    </section>
+  </div>
 </div>
 <div class="tip" id="htip" hidden></div>
 
@@ -429,6 +469,11 @@ const NOTAN={warn:'Pantallas algo más lentas; la mayoría todavía no lo nota.'
 const BIG={good:'Todo normal',warn:'Degradándose',serious:'Lento',crit:'Sin respuesta',none:'Sin datos'};
 const ICO={good:'✓',warn:'↗',serious:'!',crit:'✕',none:'–'};
 const CAP=5000;
+const MIN_NODO=30;  // consultas mínimas por nodo para acusar a uno de "más lento"
+const COLORES=['#3987e5','#d95926','#199e70','#c98500','#d55181','#9085e9'];  // azul, naranja, aguamarina, mostaza, magenta, violeta
+const colorDe=a=>COLORES[DATA.alianzas.indexOf(a)%COLORES.length];
+const fmtKB=b=>b>=1048576?(b/1048576).toFixed(1)+' MB':b>=1024?(b/1024).toFixed(1)+' KB':b+' B';
+const ocultasT=new Set();
 const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,'0');
 let DATA=null, active=null, hoverI=null, geo=null, timer=null;
@@ -501,7 +546,8 @@ function minutos(seg){return seg<90?Math.round(seg)+' s':Math.round(seg/60)+' mi
 async function load(){
   try{
     DATA=await obtener();
-    if(!active||!DATA.alianzas.some(a=>a.id===active)) active=DATA.alianzas[0].id;
+    if(!active){try{active=localStorage.getItem('monitor-alianza');}catch(e){}}
+    if(!active||(active!=='todas'&&!DATA.alianzas.some(a=>a.id===active))) active='todas';
     const edad=DATA.publicado_ts?Date.now()/1000-DATA.publicado_ts:0;
     const viejo=SRC==='remoto'&&edad>Math.max(600,DATA.intervalo*4);
     $('offline').hidden=!viejo;
@@ -518,11 +564,12 @@ async function load(){
 }
 
 function renderTabs(){
-  $('tabs').innerHTML=DATA.alianzas.map(a=>{
+  const nOk=DATA.alianzas.filter(a=>a.estado==='normal').length, peorE=DATA.alianzas.map(a=>a.estado).filter(e=>e!=='sin_datos').sort((x,y)=>rank(y)-rank(x))[0], peorT=peorE?MAP[peorE]:'none';
+  $('tabs').innerHTML=`<button class="tab tab-todas" role="tab" data-k="todas" aria-selected="${active==='todas'}"><span><span class="tab-name">Todas</span></span><span class="tab-meta">${DATA.alianzas.every(enPausa)?pillPausa:pill(peorT)}<span class="tab-ms">${nOk} de ${DATA.alianzas.length} normal</span></span></button>`+DATA.alianzas.map(a=>{
     const s=MAP[a.estado];
     return `<button class="tab" role="tab" data-k="${a.id}" aria-selected="${a.id===active}"><span><span class="tab-name">${esc(a.nombre)}</span>${a.modo==='demo'?'<span class="tab-sub">Modo demo · datos simulados</span>':''}</span><span class="tab-meta">${enPausa(a)?pillPausa:pill(s)}<span class="tab-ms">${a.mediana!=null?fmtMs(a.mediana):'–'}</span></span></button>`;
   }).join('');
-  $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=()=>{active=b.dataset.k;zoom=null;hoverI=null;$('tip').hidden=true;render();});
+  $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=()=>{active=b.dataset.k;zoom=null;hoverI=null;$('tip').hidden=true;try{localStorage.setItem('monitor-alianza',active);}catch(e){}render();});
   if(DATA.horario&&!DATA.horario.en_horario&&DATA.alianzas.every(enPausa)){$('cross').innerHTML=`<b>Fuera del horario de medición.</b> ${esc(DATA.horario.reanuda)}.`;return;}
   // Diagnóstico cruzado: todas salen por la misma red de la oficina; varias comparten servidor en InConcert.
   const medidas=DATA.alianzas.filter(a=>a.estado!=='sin_datos');
@@ -549,12 +596,15 @@ function renderTabs(){
 
 function render(){
   renderTabs();
-  const a=A(), u=DATA.umbrales, s=MAP[a.estado];
   const demoAll=DATA.alianzas.every(x=>x.modo==='demo'), realAll=DATA.alianzas.every(x=>x.modo!=='demo');
   $('modeBadge').textContent=demoAll?'Modo demo · datos simulados':realAll?'Medición real':'Mixto: real y demo';
   $('modeBadge').className='mode'+(realAll?' real':'');
   $('modeBadge').hidden=realAll; // en medición real no se muestra: solo avisa cuando hay datos simulados
   if(SRC==='remoto'&&DATA.publicado_ts) $('modeBadge').textContent+=' · publicado '+hm(DATA.publicado_ts);
+  const todas=active==='todas';
+  $('vistaTodas').hidden=!todas; $('viewSel').hidden=todas;
+  if(todas){$('vistaVivo').hidden=true;$('vistaHist').hidden=true;renderTodas();return;}
+  const a=A(), u=DATA.umbrales, s=MAP[a.estado];
   $('clock').textContent=a.ultima_ts?hm(a.ultima_ts):'--:--';
   // banner
   $('banner').dataset.s=s;
@@ -601,7 +651,7 @@ function render(){
     const st=MAP[p.estado]; const pend=p.ultimo&&p.ultimo.detalle==='pendiente';
     const d=(p.base&&p.ultimo&&p.ultimo.ms!=null)?Math.round((p.ultimo.ms/p.base-1)*100):null;
     const sub=pend?esc((p.ultimo.extra&&p.ultimo.extra.motivo)||'Pendiente de configurar'):!p.ultimo?'Sin mediciones':p.ultimo.ms==null?esc(p.ultimo.detalle):d!=null?`${d>0?'+':''}${d}% vs. normal (${fmtMs(p.base)})`:esc(p.ultimo.detalle);
-    return `<div class="svc" title="${esc(p.impacto||'')}"><div class="svc-top"><span class="svc-name">${esc(p.nombre)}</span>${pill(st)}</div><span class="svc-id">${esc(p.id)}</span><span class="svc-val">${valTxt(p)}</span><span class="svc-delta">${sub}</span></div>`;
+    return `<div class="svc" title="${esc(p.impacto||'')}"><div class="svc-top"><span class="svc-name">${esc(p.nombre)}</span>${pill(st)}</div><span class="svc-id">${esc(p.id)}${p.bytes?` · ${fmtKB(p.bytes)}`:''}</span><span class="svc-val">${valTxt(p)}</span><span class="svc-delta">${sub}</span></div>`;
   }).join('');
   // red y balanceadores
   const S=DATA.salida;
@@ -612,10 +662,10 @@ function render(){
   else{
     const resp=lbs.filter(x=>x.respuesta_prom!=null), mejor=resp.length?Math.min(...resp.map(x=>x.respuesta_prom)):null;
     const masUsado=lbs[0].ip, masLento=lbs.slice().sort((p,q)=>q.veces_lento-p.veces_lento)[0];
-    $('lbs').innerHTML=`<div><table class="lb"><thead><tr><th>Nodo (IP)</th><th title="Cuántas consultas del robot atendió este nodo y qué parte del total">Consultas</th><th title="En cuántos ciclos este nodo atendió la consulta más lenta del grupo">Veces el más lento</th><th>Respuesta prom.</th><th>Conexión prom.</th><th>Última vez</th></tr></thead><tbody>${lbs.map(x=>{
-      const malo=resp.length>1&&x.respuesta_prom!=null&&x.respuesta_prom>mejor*1.3;
+    $('lbs').innerHTML=`<div><table class="lb"><thead><tr><th>Nodo (IP)</th><th title="Cuántas consultas del robot atendió este nodo y qué parte del total">Consultas</th><th title="En cuántos ciclos este nodo atendió la consulta más lenta del grupo">Veces el más lento</th><th>Respuesta prom.</th><th title="Viaje por internet hasta Amazon">Red (TCP)</th><th title="Negociar el cifrado con el nodo: red + trabajo del balanceador">Balanceador (TLS)</th><th>Última vez</th></tr></thead><tbody>${lbs.map(x=>{
+      const malo=lbs.every(y=>y.consultas>=MIN_NODO)&&resp.length>1&&x.respuesta_prom!=null&&x.respuesta_prom>mejor*1.3;
       const tags=(x.ip===masUsado&&lbs.length>1?'<span class="tag uso">más usado</span>':'')+(malo?'<span class="tag">más lento</span>':'');
-      return `<tr class="${malo?'peor':''}"><td>${esc(x.ip)}${tags}</td><td>${x.consultas} <span class="tag">${x.pct}%</span>${x.fallos?` <span class="tag">(${x.fallos} sin resp.)</span>`:''}</td><td>${x.veces_lento} <span class="tag">${x.pct_lento}%</span></td><td>${fmtMs(x.respuesta_prom)}</td><td>${fmtMs(x.conexion_prom)}</td><td>${hm(x.ultimo)}</td></tr>`;}).join('')}</tbody></table></div>`;
+      return `<tr class="${malo?'peor':''}"><td>${esc(x.ip)}${tags}</td><td>${x.consultas} <span class="tag">${x.pct}%</span>${x.fallos?` <span class="tag">(${x.fallos} sin resp.)</span>`:''}</td><td>${x.veces_lento} <span class="tag">${x.pct_lento}%</span></td><td>${fmtMs(x.respuesta_prom)}</td><td>${x.tcp_prom!=null?fmtMs(x.tcp_prom):'–'}</td><td>${x.tls_prom!=null?fmtMs(x.tls_prom):fmtMs(x.conexion_prom)}</td><td>${hm(x.ultimo)}</td></tr>`;}).join('')}</tbody></table>${lbs.some(y=>y.consultas<MIN_NODO)?`<span class="muted" style="font-size:12.5px">Para señalar un nodo "más lento" cada uno necesita al menos ${MIN_NODO} consultas (~1 hora); antes, la diferencia puede ser solo la hora en que le tocó atender.</span>`:''}</div>`;
   }
   // canales
   const canal=(g,titulo,desc)=>{
@@ -807,7 +857,94 @@ function showTip(k){
   let left=pxx+14; if(left+tw>cw) left=pxx-tw-14; if(left<0) left=0;
   tip.style.left=left+'px'; tip.style.top='8px';
 }
-if('ResizeObserver' in window) new ResizeObserver(()=>{if(DATA) drawECG(A());}).observe($('chart'));
+// ================= Vista "Todas": comparativo de alianzas =================
+function serieDe(a,desdeMin){
+  if(rango==='7d'||rango==='mes') return a.rangos[rango];
+  const R=a.rangos['24h'], dur=RANGOS.find(r=>r[0]===rango)[2];
+  return {desde:desdeMin,hasta:R.hasta,bloque:R.bloque,agrupado:false,serie:R.serie.filter(p=>p.ts>=desdeMin)};
+}
+function renderTodas(){
+  const als=DATA.alianzas;
+  $('clock').textContent=hm(Math.max(...als.map(a=>a.ultima_ts||0)))||'--:--';
+  $('rangeSelT').innerHTML=RANGOS.map(r=>`<button data-r="${r[0]}" aria-pressed="${r[0]===rango}">${r[0]==='mes'?'Lo que va del mes':r[0].replace('h',' h').replace('7d','7 días')}</button>`).join('');
+  $('rangeSelT').querySelectorAll('button').forEach(b=>b.onclick=()=>{rango=b.dataset.r;try{localStorage.setItem('monitor-rango',rango);}catch(e){}renderTodas();});
+  $('legT').className='legend legT';
+  $('legT').innerHTML=als.map(a=>`<button data-k="${a.id}" aria-pressed="${!ocultasT.has(a.id)}"><i class="sw-a" style="background:${colorDe(a)}"></i>${esc(a.nombre)}</button>`).join('')+'<span class="muted">Escala logarítmica</span>';
+  $('legT').querySelectorAll('button').forEach(b=>b.onclick=()=>{ocultasT.has(b.dataset.k)?ocultasT.delete(b.dataset.k):ocultasT.add(b.dataset.k);renderTodas();});
+  drawTodas();
+  // tabla comparativa
+  $('cmpBody').innerHTML=als.map(a=>{
+    const st=MAP[a.estado], pct=(a.mediana&&a.base)?Math.round((a.mediana/a.base-1)*100):null;
+    const ses=a.sondas.find(x=>x.id==='get_user_session_data'), mesA=a.historico.meses[a.historico.meses.length-1];
+    return `<tr data-k="${a.id}"><td><span style="display:inline-flex;align-items:center;gap:8px"><i class="sw-a" style="background:${colorDe(a)}"></i><b>${esc(a.nombre)}</b></span></td><td>${esc(a.servidor||'')}</td><td>${enPausa(a)?pillPausa:pill(st)}</td><td class="n">${fmtMs(a.mediana)}</td><td class="n">${fmtMs(a.base)}</td><td class="n">${pct==null?'–':(pct>0?'+':'')+pct+'%'}</td><td class="n">${a.picos?a.picos.hoy:'–'}</td><td class="n">${fmtPct(mesA.disponibilidad)}</td><td class="n">${ses&&ses.ultimo&&ses.ultimo.ms!=null?fmtMs(ses.ultimo.ms):'–'}</td><td class="n">${ses&&ses.bytes?fmtKB(ses.bytes):'–'}</td></tr>`;}).join('');
+  $('cmpBody').querySelectorAll('tr').forEach(tr=>tr.onclick=()=>{active=tr.dataset.k;try{localStorage.setItem('monitor-alianza',active);}catch(e){}render();window.scrollTo({top:0,behavior:'smooth'});});
+  // nodos de todos los balanceadores (sumando las alianzas que comparten nodo)
+  const S=DATA.salida;
+  $('salidaT').innerHTML=S?`<span class="k">Salida de la oficina a internet</span><span class="v">${esc(S.ip)}</span>${S.canal?`<b>${esc(S.canal)}</b>`:''}<span class="muted">desde ${dm(S.desde)}</span>`:'<span class="muted">Aún no se ha consultado la IP pública de la oficina.</span>';
+  const nodos={};
+  als.forEach(a=>(a.balanceadores||[]).forEach(x=>{
+    const n=nodos[x.ip]||(nodos[x.ip]={ip:x.ip,servs:new Set(),als:[],c:0,f:0,r:0,rn:0,tcp:0,tn:0,tls:0,ln:0,ultimo:0});
+    n.servs.add(a.servidor||a.nombre); n.als.push(a.nombre); n.c+=x.consultas; n.f+=x.fallos; n.ultimo=Math.max(n.ultimo,x.ultimo);
+    const ok=x.consultas-x.fallos;
+    if(x.respuesta_prom!=null){n.r+=x.respuesta_prom*ok;n.rn+=ok;}
+    if(x.tcp_prom!=null){n.tcp+=x.tcp_prom*ok;n.tn+=ok;}
+    if(x.tls_prom!=null){n.tls+=x.tls_prom*ok;n.ln+=ok;}
+  }));
+  const lista=Object.values(nodos).map(n=>({...n,serv:[...n.servs].join(', '),resp:n.rn?n.r/n.rn:null,tcpP:n.tn?n.tcp/n.tn:null,tlsP:n.ln?n.tls/n.ln:null}))
+    .sort((p,q)=>p.serv.localeCompare(q.serv)||q.c-p.c);
+  $('nodosT').innerHTML=lista.length?lista.map(n=>{
+    const pares=lista.filter(m=>m.serv===n.serv&&m.resp!=null), mejor=Math.min(...pares.map(m=>m.resp));
+    const malo=pares.length>1&&pares.every(m=>m.c>=MIN_NODO)&&n.resp!=null&&n.resp>mejor*1.3;
+    return `<tr class="${malo?'peor':''}"><td style="font-family:var(--body)">${esc(n.serv)}</td><td>${esc(n.ip)}${malo?'<span class="tag">más lento</span>':''}</td><td style="font-family:var(--body);white-space:normal">${n.als.map(esc).join(', ')}</td><td>${n.c}${n.f?` <span class="tag">(${n.f} sin resp.)</span>`:''}</td><td>${fmtMs(n.resp)}</td><td>${n.tcpP!=null?fmtMs(n.tcpP):'–'}</td><td>${n.tlsP!=null?fmtMs(n.tlsP):'–'}</td><td>${hm(n.ultimo)}</td></tr>`;}).join('')
+    :'<tr><td colspan="8" class="empty">Sin datos todavía: los nodos aparecen con las próximas mediciones.</td></tr>';
+  // incidentes de todas, en el rango elegido
+  const hasta=Math.max(...als.map(a=>a.ultima_ts||0)), desde=rango==='mes'?als[0].rangos.mes.desde:hasta-(RANGOS.find(r=>r[0]===rango)[2]);
+  const incs=als.flatMap(a=>a.incidentes.filter(r=>(r.fin||hasta)>=desde).map(r=>({...r,a}))).sort((p,q)=>q.inicio-p.inicio);
+  $('incTSub').textContent=`Ordenados del más reciente al más antiguo · ${rango==='mes'?'lo que va del mes':'últimas '+RLBL[rango]}`;
+  $('incT').innerHTML=incs.length?incs.map(r=>`<tr><td><span style="display:inline-flex;align-items:center;gap:8px"><i class="sw-a" style="background:${colorDe(r.a)}"></i>${esc(r.a.nombre)}</span></td><td class="mono">${dm(r.inicio)}</td><td class="mono">${r.fin?hm(r.fin):'<b>En curso</b>'}</td><td class="mono">${Math.round(((r.fin||hasta)-r.inicio)/60)} min</td><td>${pill(MAP[r.peor])}</td><td class="notan">${NOTAN[MAP[r.peor]]||'–'}</td><td class="mono">${r.pico>=CAP?'sin resp.':fmtMs(r.pico)}</td></tr>`).join('')
+    :`<tr><td colspan="7" class="empty">Sin incidentes en ${rango==='mes'?'lo que va del mes':'las últimas '+RLBL[rango]}.</td></tr>`;
+}
+function drawTodas(){
+  const als=DATA.alianzas, svg=$('ecgT'); const W=Math.max(300,$('chartT').clientWidth), H=W<560?250:320;
+  const M={l:50,r:14,t:18,b:34}, pw=W-M.l-M.r, yTop=M.t, yBot=H-M.b-12, stripY=H-M.b-6;
+  const hasta=Math.max(...als.map(a=>a.rangos['24h'].hasta));
+  const desde=(rango==='7d'||rango==='mes')?als[0].rangos[rango].desde:hasta-RANGOS.find(r=>r[0]===rango)[2];
+  const span=Math.max(60,hasta-desde);
+  const lo=Math.log(80),hi=Math.log(3000), Y=x=>yBot-(Math.log(Math.min(Math.max(x,80),3000))-lo)/(hi-lo)*(yBot-yTop), X=ts=>M.l+(ts-desde)/span*pw;
+  const series=als.map(a=>({a,V:serieDe(a,desde)}));
+  $('tSub').textContent='Peor tiempo de base de datos de cada alianza · '+(rango==='mes'?'lo que va del mes':'las últimas '+RLBL[rango])+((rango==='7d'||rango==='mes')?' (mediana de cada bloque)':'');
+  let g='';
+  [100,200,500,1000,2000].forEach(tk=>{g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${Y(tk)}" y2="${Y(tk)}" stroke="var(--grid)"/><text x="${M.l-8}" y="${Y(tk)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">${tk>=1000?tk/1000+' s':tk}</text>`;});
+  // umbrales en gris: el amarillo y el rojo quedan para las alianzas y los estados
+  [[DATA.umbrales.lento_ms,'lento'],[DATA.umbrales.critico_ms,'crítico']].forEach(([v,n])=>{g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="6 5"/><text x="${W-M.r-4}" y="${Y(v)-6}" text-anchor="end" font-size="11.5" fill="var(--muted)">${fmtMs(v)} · ${n}</text>`;});
+  g+=ejeX(desde,hasta,X,M,W,H,stripY);
+  series.forEach(({a,V})=>{
+    if(ocultasT.has(a.id)) return;
+    const off=V.agrupado?V.bloque/2:0; let d='',prev=null;
+    V.serie.forEach(p=>{if(p.med==null){prev=null;return;}d+=(prev!==null&&p.ts-prev<=V.bloque*2.5?'L':'M')+X(p.ts+off).toFixed(1)+' '+Y(p.med).toFixed(1);prev=p.ts;});
+    g+=`<path d="${d}" fill="none" stroke="${colorDe(a)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    V.serie.forEach(p=>{if(p.fallos>0) g+=`<circle cx="${X(p.ts+off).toFixed(1)}" cy="${yTop+2}" r="3" fill="${colorDe(a)}" stroke="var(--surface)" stroke-width="1.5"/>`;});
+  });
+  g+=`<line id="xhT" x1="0" x2="0" y1="${yTop}" y2="${stripY+6}" stroke="var(--muted)" visibility="hidden"/><rect id="hitT" x="${M.l}" y="0" width="${pw}" height="${H}" fill="transparent"/>`;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('height',H); svg.innerHTML=g;
+  const hit=svg.querySelector('#hitT'), xh=svg.querySelector('#xhT'), tip=$('tipT');
+  hit.onpointermove=ev=>{
+    const r=svg.getBoundingClientRect(), x=Math.min(W-M.r,Math.max(M.l,(ev.clientX-r.left)*(W/r.width))), ts=desde+(x-M.l)/pw*span;
+    const filas=series.filter(s=>!ocultasT.has(s.a.id)).map(({a,V})=>{
+      const off=V.agrupado?V.bloque/2:0; let b=null,bd=1e18;
+      V.serie.forEach(p=>{const dd=Math.abs(p.ts+off-ts);if(dd<bd){bd=dd;b=p;}});
+      return b&&bd<=V.bloque*1.5?{a,p:b}:null;}).filter(Boolean).sort((p,q)=>(q.p.med??CAP)-(p.p.med??CAP));
+    if(!filas.length){tip.hidden=true;xh.setAttribute('visibility','hidden');return;}
+    xh.setAttribute('x1',x);xh.setAttribute('x2',x);xh.setAttribute('visibility','visible');
+    tip.innerHTML=`<b class="mono">${dm(ts)}</b><table>${filas.map(({a,p})=>`<tr><td><span style="display:inline-flex;align-items:center;gap:7px"><i class="sw-a" style="background:${colorDe(a)}"></i>${esc(a.nombre)}</span></td><td>${p.med==null?(p.fallos?'sin resp.':'–'):fmtMs(p.med)}</td></tr>`).join('')}</table>`;
+    tip.hidden=false;
+    const cw=$('chartT').clientWidth, pxx=x*(r.width/W), tw=tip.offsetWidth; let left=pxx+14; if(left+tw>cw) left=pxx-tw-14; if(left<0) left=0;
+    tip.style.left=left+'px'; tip.style.top='8px';
+  };
+  hit.onpointerleave=()=>{tip.hidden=true;xh.setAttribute('visibility','hidden');};
+}
+if('ResizeObserver' in window) new ResizeObserver(()=>{if(DATA&&active!=='todas') drawECG(A());}).observe($('chart'));
+if('ResizeObserver' in window) new ResizeObserver(()=>{if(DATA&&active==='todas') drawTodas();}).observe($('chartT'));
 load();
 })();
 </script>
