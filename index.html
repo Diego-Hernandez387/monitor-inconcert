@@ -108,6 +108,22 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);margin-top:8px}
 .legend span{display:inline-flex;align-items:center;gap:7px}
 .sw-line{width:20px;height:2px;background:var(--accent);border-radius:2px}
+.sw-conn{width:20px;height:0;border-top:2px dashed var(--conn)}
+:root{--conn:#b39ddb}
+/* Red y balanceadores */
+.ruta{display:flex;flex-direction:column;gap:12px}
+.salida{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline;background:var(--surface-2);border-radius:8px;padding:10px 14px}
+.salida .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.salida .v{font-family:var(--mono);font-size:17px}
+.lbs{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.lbs>div{overflow-x:auto}
+table.lb{border-collapse:collapse;width:100%;font-size:14px}
+.lb th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+.lb td{padding:7px 8px;border-bottom:1px solid var(--grid);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.lb tr.peor td{color:var(--serious-ink)}
+.lb .tag{font-family:var(--body);font-size:11.5px;margin-left:6px;color:var(--muted)}
+.lb .tag.uso{color:var(--accent)}
+.lb tr.peor .tag{color:var(--serious-ink)}
 .sw-band{width:18px;height:10px;background:var(--band);border:1px solid var(--line)}
 .sw-dash{width:20px;height:0;border-top:2px dashed var(--warn)}
 .sw-dash.c{border-top-color:var(--crit)}
@@ -146,13 +162,15 @@ table.inc{border-collapse:collapse;width:100%;min-width:900px;font-size:14px}
 .foot{font-size:13px;color:var(--muted);max-width:75ch}
 
 /* pestañas por alianza */
-.tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
-.tab{font:inherit;color:var(--fg);text-align:left;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0}
+.tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+@media (max-width:620px){.tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tab{font:inherit;color:var(--fg);text-align:left;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0}
 .tab:hover{background:var(--surface-2)}
-.tab[aria-selected="true"]{border:2px solid var(--accent);padding:11px 13px}
-.tab-name{font-family:var(--display);font-size:20px;font-weight:700}
+.tab[aria-selected="true"]{border:2px solid var(--accent);padding:9px 11px}
+.tab-name{font-family:var(--display);font-size:18px;font-weight:700}
 .tab-sub{display:block;font-size:12.5px;color:var(--muted);font-family:var(--body);font-weight:400}
-.tab-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.tab-meta{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px}
+.tabs .tab{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px}
 .tab-ms{font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .cross{margin:0;font-size:14px;padding:10px 14px;border-radius:8px;background:var(--surface-2)}
 .cross b{font-weight:600}
@@ -314,6 +332,7 @@ table.mes{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
     <div class="legend">
       <span><i class="sw-line"></i><span id="lgLine">Peor respuesta del grupo</span></span>
       <span id="lgMax" hidden><i class="sw-max"></i>Valor más alto del bloque</span>
+      <span title="Lo que tarda abrir la conexión desde la oficina hasta Amazon: la parte 'red'. Si sube junto con la respuesta, el problema es de red; si queda plana, es del servidor."><i class="sw-conn"></i>Conexión (red)</span>
       <span><i class="sw-band"></i>Rango normal (±30%)</span>
       <span><i class="sw-dash"></i><span id="lgLento">500 ms: lento</span></span>
       <span><i class="sw-dash c"></i><span id="lgCrit">2 s: crítico</span></span>
@@ -321,6 +340,15 @@ table.mes{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
       <span class="muted">Escala logarítmica</span>
     </div>
     <div class="services" id="dbServices"></div>
+  </section>
+
+  <section class="card ruta">
+    <div class="section-head">
+      <h2>Red y balanceadores</h2>
+      <span class="muted" style="font-size:14px">Por dónde sale la oficina a internet y qué nodo del balanceador de Amazon atendió las consultas · últimas 24 h. Si un nodo responde peor que los demás de forma constante, ese nodo tiene un problema.</span>
+    </div>
+    <div class="salida" id="salida"></div>
+    <div class="lbs" id="lbs"></div>
   </section>
 
   <section>
@@ -492,17 +520,30 @@ async function load(){
 function renderTabs(){
   $('tabs').innerHTML=DATA.alianzas.map(a=>{
     const s=MAP[a.estado];
-    return `<button class="tab" role="tab" data-k="${a.id}" aria-selected="${a.id===active}"><span><span class="tab-name">${esc(a.nombre)}</span><span class="tab-sub">${a.modo==='demo'?'Modo demo · datos simulados':'Medición real'}</span></span><span class="tab-meta">${enPausa(a)?pillPausa:pill(s)}<span class="tab-ms">${a.mediana!=null?fmtMs(a.mediana):'–'}</span></span></button>`;
+    return `<button class="tab" role="tab" data-k="${a.id}" aria-selected="${a.id===active}"><span><span class="tab-name">${esc(a.nombre)}</span>${a.modo==='demo'?'<span class="tab-sub">Modo demo · datos simulados</span>':''}</span><span class="tab-meta">${enPausa(a)?pillPausa:pill(s)}<span class="tab-ms">${a.mediana!=null?fmtMs(a.mediana):'–'}</span></span></button>`;
   }).join('');
   $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=()=>{active=b.dataset.k;zoom=null;hoverI=null;$('tip').hidden=true;render();});
   if(DATA.horario&&!DATA.horario.en_horario&&DATA.alianzas.every(enPausa)){$('cross').innerHTML=`<b>Fuera del horario de medición.</b> ${esc(DATA.horario.reanuda)}.`;return;}
+  // Diagnóstico cruzado: todas salen por la misma red de la oficina; varias comparten servidor en InConcert.
   const medidas=DATA.alianzas.filter(a=>a.estado!=='sin_datos');
   const bad=medidas.filter(a=>a.estado!=='normal'), ok=medidas.filter(a=>a.estado==='normal');
+  const nom=l=>l.map(a=>esc(a.nombre)).join(', ');
+  const servs=[...new Set(medidas.map(a=>a.servidor||a.nombre))];
+  const porServ=sv=>medidas.filter(a=>(a.servidor||a.nombre)===sv);
   let t;
-  if(medidas.length<2) t='<b>Diagnóstico cruzado no disponible:</b> se necesitan las dos alianzas midiendo.';
+  if(medidas.length<2) t='<b>Diagnóstico cruzado no disponible:</b> se necesitan al menos dos alianzas midiendo.';
   else if(!bad.length) t='<b>Todas las alianzas operan normal.</b>';
-  else if(ok.length) t=`<b>Solo ${bad.map(a=>esc(a.nombre)).join(', ')} presenta fallas; ${ok.map(a=>esc(a.nombre)).join(', ')} opera normal.</b> Como todas salen por la misma red, el problema está en el servidor de InConcert de ${bad.map(a=>esc(a.nombre)).join(', ')}, no en nuestra red.`;
-  else t='<b>Todas las alianzas fallan al mismo tiempo.</b> Revisar primero nuestra red (firewall, canales ETB e IFX). Si está bien, es una falla general de InConcert.';
+  else if(!ok.length) t='<b>Todas las alianzas fallan al mismo tiempo.</b> Revisar primero nuestra red (firewall, canales ETB e IFX). Si está bien, es una falla general de InConcert.';
+  else{
+    const partes=[];
+    servs.forEach(sv=>{
+      const grupo=porServ(sv), gb=grupo.filter(a=>a.estado!=='normal'); if(!gb.length) return;
+      if(grupo.length>1&&gb.length===grupo.length) partes.push(`<b>Fallan todas las del ${esc(sv)}</b> (${nom(grupo)}): el problema está en ese servidor compartido de InConcert.`);
+      else if(grupo.length>1) partes.push(`<b>${nom(gb)}</b> ${gb.length>1?'presentan':'presenta'} fallas y ${nom(grupo.filter(a=>a.estado==='normal'))}, del mismo ${esc(sv)}, ${grupo.length-gb.length>1?'operan':'opera'} normal: es algo propio de ${gb.length>1?'esas instancias':'esa instancia'} (su base de datos o configuración), no del servidor.`);
+      else partes.push(`<b>${nom(gb)}</b> presenta fallas: el problema está en su servidor de InConcert.`);
+    });
+    t=partes.join(' ')+` <span class="muted">Las demás operan normal saliendo por la misma red de la oficina: no es nuestra red.</span>`;
+  }
   $('cross').innerHTML=t;
 }
 
@@ -562,6 +603,20 @@ function render(){
     const sub=pend?esc((p.ultimo.extra&&p.ultimo.extra.motivo)||'Pendiente de configurar'):!p.ultimo?'Sin mediciones':p.ultimo.ms==null?esc(p.ultimo.detalle):d!=null?`${d>0?'+':''}${d}% vs. normal (${fmtMs(p.base)})`:esc(p.ultimo.detalle);
     return `<div class="svc" title="${esc(p.impacto||'')}"><div class="svc-top"><span class="svc-name">${esc(p.nombre)}</span>${pill(st)}</div><span class="svc-id">${esc(p.id)}</span><span class="svc-val">${valTxt(p)}</span><span class="svc-delta">${sub}</span></div>`;
   }).join('');
+  // red y balanceadores
+  const S=DATA.salida;
+  $('salida').innerHTML=S?`<span class="k">Salida de la oficina a internet</span><span class="v">${esc(S.ip)}</span>${S.canal?`<b>${esc(S.canal)}</b>`:''}<span class="muted">desde ${dm(S.desde)}</span>${S.cambios&&S.cambios.length>1?`<span class="muted">· cambió de IP ${S.cambios.length-1} ${S.cambios.length===2?'vez':'veces'} en 24 h (posible cambio de canal)</span>`:''}`
+    :'<span class="muted">Aún no se ha consultado la IP pública de la oficina.</span>';
+  const lbs=a.balanceadores||[];
+  if(!lbs.length){$('lbs').innerHTML='<span class="muted">Sin datos todavía: los nodos aparecen desde la próxima medición.</span>';}
+  else{
+    const resp=lbs.filter(x=>x.respuesta_prom!=null), mejor=resp.length?Math.min(...resp.map(x=>x.respuesta_prom)):null;
+    const masUsado=lbs[0].ip, masLento=lbs.slice().sort((p,q)=>q.veces_lento-p.veces_lento)[0];
+    $('lbs').innerHTML=`<div><table class="lb"><thead><tr><th>Nodo (IP)</th><th title="Cuántas consultas del robot atendió este nodo y qué parte del total">Consultas</th><th title="En cuántos ciclos este nodo atendió la consulta más lenta del grupo">Veces el más lento</th><th>Respuesta prom.</th><th>Conexión prom.</th><th>Última vez</th></tr></thead><tbody>${lbs.map(x=>{
+      const malo=resp.length>1&&x.respuesta_prom!=null&&x.respuesta_prom>mejor*1.3;
+      const tags=(x.ip===masUsado&&lbs.length>1?'<span class="tag uso">más usado</span>':'')+(malo?'<span class="tag">más lento</span>':'');
+      return `<tr class="${malo?'peor':''}"><td>${esc(x.ip)}${tags}</td><td>${x.consultas} <span class="tag">${x.pct}%</span>${x.fallos?` <span class="tag">(${x.fallos} sin resp.)</span>`:''}</td><td>${x.veces_lento} <span class="tag">${x.pct_lento}%</span></td><td>${fmtMs(x.respuesta_prom)}</td><td>${fmtMs(x.conexion_prom)}</td><td>${hm(x.ultimo)}</td></tr>`;}).join('')}</tbody></table></div>`;
+  }
   // canales
   const canal=(g,titulo,desc)=>{
     const ps=a.sondas.filter(p=>p.grupo===g); if(!ps.length) return '';
@@ -713,6 +768,7 @@ function drawECG(a){
   pts.forEach(p=>{const st=MAP[p.estado],x0=agr?X(p.ts):X(p.ts)-cw/2;g+=`<rect x="${x0.toFixed(1)}" y="${stripY}" width="${(cw+.3).toFixed(1)}" height="6" fill="${col[st]}" opacity="${st==='good'?.35:.95}"/>`;});
   const linea=campo=>{let d='',prev=null;pts.forEach(p=>{if(p[campo]==null){prev=null;return;}d+=(prev!==null&&p.ts-prev<=V.bloque*2.5?'L':'M')+px(p).toFixed(1)+' '+Y(p[campo]).toFixed(1);prev=p.ts;});return d;};
   if(agr) g+=`<path d="${linea('max')}" fill="none" stroke="var(--accent)" stroke-opacity=".35" stroke-width="1.2" stroke-linejoin="round"/>`;
+  g+=`<path d="${linea('red')}" fill="none" stroke="var(--conn)" stroke-width="1.5" stroke-dasharray="5 3" stroke-linejoin="round" opacity=".9"/>`;
   g+=`<path d="${linea('med')}" fill="none" stroke="var(--accent)" stroke-width="${pts.length>400?1.5:2}" stroke-linejoin="round" stroke-linecap="round"/>`;
   pts.forEach(p=>{if(p.fallos>0){const r=agr?2.5+3*p.fallos/p.n:3.5;g+=`<circle cx="${px(p).toFixed(1)}" cy="${lane}" r="${r.toFixed(1)}" fill="var(--crit)" stroke="var(--surface)" stroke-width="1.5"/>`;}});
   const lh=pts[pts.length-1];
@@ -742,8 +798,8 @@ function showTip(k){
   const x=geo.X(k); xh.setAttribute('x1',x); xh.setAttribute('x2',x); xh.setAttribute('visibility','visible');
   const agr=V.agrupado, cuando=agr?`${dm(h.ts)} – ${hm(h.ts+V.bloque)}`:dm(h.ts);
   const filas=h.estado==='sin_datos'?'<tr><td>Sin datos</td><td>–</td></tr>':agr
-    ?`<tr><td>Mediana</td><td><b>${fmtMs(h.med)}</b></td></tr><tr><td>Valor más alto</td><td>${fmtMs(h.max)}</td></tr><tr><td>Sin respuesta</td><td>${h.fallos} de ${h.n}</td></tr>`
-    :`<tr><td>Peor tiempo de BD</td><td><b>${h.fallos?'sin resp.':fmtMs(h.med)}</b></td></tr>`;
+    ?`<tr><td>Mediana</td><td><b>${fmtMs(h.med)}</b></td></tr><tr><td>Valor más alto</td><td>${fmtMs(h.max)}</td></tr><tr><td>Sin respuesta</td><td>${h.fallos} de ${h.n}</td></tr>${h.red!=null?`<tr><td>Conexión (red)</td><td>${fmtMs(h.red)}</td></tr>`:''}`
+    :`<tr><td>Peor tiempo de BD</td><td><b>${h.fallos?'sin resp.':fmtMs(h.med)}</b></td></tr>${h.red!=null?`<tr><td>Conexión (red)</td><td>${fmtMs(h.red)}</td></tr>`:''}${h.ip?`<tr><td>Balanceador</td><td class="mono">${esc(h.ip)}</td></tr>`:''}`;
   const tip=$('tip');
   tip.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b class="mono">${cuando}</b>${pill(MAP[h.estado])}</div><table>${filas}</table>${agr?'<div class="muted" style="font-size:12px;margin-top:4px">Clic para ver este momento en detalle</div>':''}`;
   tip.hidden=false;
