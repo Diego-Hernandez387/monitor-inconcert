@@ -676,7 +676,8 @@ function render(){
       const d=pend?esc((p.ultimo.extra&&p.ultimo.extra.motivo)||'Pendiente de configurar'):('perdida_pct' in ex)?`Jitter ${ex.jitter_ms} ms · pérdida ${ex.perdida_pct}%`:p.ultimo?esc(p.ultimo.detalle):'Sin mediciones';
       return `<div class="chan-row"><span class="n" title="${esc(p.impacto||'')}">${esc(p.nombre)}<span class="svc-id">${esc(p.id)}</span></span><span class="val">${valTxt(p)}</span><span class="d">${d}</span><span>${pill(MAP[p.estado])}</span>${spark(p.serie,p.base)}</div>`;}).join('')}</div>`;
   };
-  $('channels').innerHTML=canal('voz','Voz','Llamadas: que la barra abra y que el audio llegue bien')+canal('whatsapp','WhatsApp','Recibir y responder mensajes');
+  $('channels').innerHTML=(canal('voz','Voz','Llamadas: que la barra abra y que el audio llegue bien')+canal('whatsapp','WhatsApp','Recibir y responder mensajes'))
+    ||`<p class="muted">${esc(a.nombre)} no usa los canales de InConcert (telefonía o WhatsApp), así que no se miden.</p>`;
   // complementarios
   $('compGrid').innerHTML=a.sondas.filter(p=>p.grupo==='complementario').map(p=>{
     const pend=p.ultimo&&p.ultimo.detalle==='pendiente';
