@@ -470,7 +470,7 @@ const BIG={good:'Todo normal',warn:'Degradándose',serious:'Lento',crit:'Sin res
 const ICO={good:'✓',warn:'↗',serious:'!',crit:'✕',none:'–'};
 const CAP=5000;
 const MIN_NODO=30;  // consultas mínimas por nodo para acusar a uno de "más lento"
-const COLORES=['#3987e5','#d95926','#199e70','#c98500','#d55181','#9085e9'];  // azul, naranja, aguamarina, mostaza, magenta, violeta
+const COLORES=['#3987e5','#d95926','#199e70','#c98500','#d55181','#9085e9','#008300'];  // azul, naranja, aguamarina, mostaza, magenta, violeta, verde
 const colorDe=a=>COLORES[DATA.alianzas.indexOf(a)%COLORES.length];
 const fmtKB=b=>b>=1048576?(b/1048576).toFixed(1)+' MB':b>=1024?(b/1024).toFixed(1)+' KB':b+' B';
 const ocultasT=new Set();
