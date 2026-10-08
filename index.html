@@ -181,6 +181,11 @@ table.inc{border-collapse:collapse;width:100%;min-width:900px;font-size:14px}
 .tab-meta{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px}
 .tabs .tab{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px}
 .tab-ms{font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tab-name .chev{color:var(--muted);font-size:13px;margin-left:6px;font-weight:400}
+.tabs .tab .tab-sub{font-size:12.5px}
+.tab.open{background:var(--surface-2)}
+.subtabs{margin-top:-8px;border:2px solid var(--accent);border-radius:10px;padding:10px;background:var(--surface-2)}
+.subtabs .tab-name{font-size:16px}
 .cross{margin:0;font-size:14px;padding:10px 14px;border-radius:8px;background:var(--surface-2)}
 .cross b{font-weight:600}
 @keyframes pulse{0%{r:4;opacity:.7}100%{r:13;opacity:0}}
@@ -285,7 +290,8 @@ table.mes{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
 
   <div class="offline" id="offline" hidden>No hay conexión con el monitor. Revisa que la ventana del monitor siga abierta en el PC donde corre.</div>
 
-  <nav class="tabs" role="tablist" aria-label="Alianza" id="tabs"></nav>
+  <nav class="tabs" role="tablist" aria-label="Servidor de InConcert" id="tabs"></nav>
+  <nav class="tabs subtabs" role="tablist" aria-label="Alianzas del servidor" id="subtabs" hidden></nav>
   <p class="cross" id="cross" aria-live="polite"></p>
 
   <div class="seg viewsel" id="viewSel" role="group" aria-label="Vista">
@@ -430,13 +436,14 @@ table.mes{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
     <section class="card">
       <div class="main-head">
         <div>
-          <h2>Comparativo de alianzas</h2>
-          <div class="muted" style="font-size:14px" id="tSub">Peor tiempo de base de datos de cada alianza</div>
+          <h2 id="tTitle">Comparativo de servidores</h2>
+          <div class="muted" style="font-size:14px" id="tSub">Peor tiempo de base de datos</div>
         </div>
+        <div class="seg" id="modoT" role="group" aria-label="Ver la gráfica"><button data-m="servidor">Por servidor</button><button data-m="alianza">Ver por alianza</button></div>
       </div>
       <div class="range-row"><div class="seg" id="rangeSelT" role="group" aria-label="Rango de tiempo"></div>
         <span class="ctl-note">Clic en un nombre de la leyenda para ocultarlo o mostrarlo. Pasa el mouse para comparar en el mismo momento.</span></div>
-      <div class="chart" id="chartT"><svg id="ecgT" role="img" aria-label="Tiempo de respuesta de base de datos por alianza"></svg><div class="tip" id="tipT" hidden></div></div>
+      <div class="chart" id="chartT"><svg id="ecgT" role="img" aria-label="Tiempo de respuesta de base de datos por servidor o por alianza"></svg><div class="tip" id="tipT" hidden></div></div>
       <div class="legend" id="legT"></div>
       <div class="tbl-wrap" style="margin-top:14px"><table class="mes cmp"><thead><tr><th>Alianza</th><th>Servidor</th><th>Estado</th><th>Mediana reciente</th><th>Normal aprendido</th><th>Variación</th><th title="Mediciones sueltas de más del doble de lo habitual">Picos hoy</th><th>Disponibilidad del mes</th><th title="get_user_session_data">Mantener la sesión</th><th title="Tamaño de la última respuesta de get_user_session_data">Tamaño sesión</th></tr></thead><tbody id="cmpBody"></tbody></table></div>
       <span class="muted" style="font-size:13px">Clic en una fila para abrir esa alianza.</span>
@@ -520,6 +527,12 @@ const pill=s=>`<span class="pill s-${s}"><i>${ICO[s]}</i>${LBL[s]}</span>`;
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const median=a=>{if(!a.length)return null;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;};
 const A=()=>DATA.alianzas.find(a=>a.id===active)||DATA.alianzas[0];
+/* Servidores de InConcert (CLS38, CLS50, CLS14): agrupan las alianzas que viven en el mismo nodo */
+const nodoDe=a=>a.nodo||a.servidor||a.nombre;
+function gruposServ(){const m=new Map();DATA.alianzas.forEach(a=>{const k=nodoDe(a);if(!m.has(k))m.set(k,{id:'srv:'+k,nombre:k,servidor:a.servidor||'',als:[]});m.get(k).als.push(a);});
+  return [...m.values()].map((g,i)=>({...g,color:COLORES[i%COLORES.length]}));}
+const grupoDe=a=>gruposServ().find(g=>g.als.includes(a));
+let modoT=null;
 
 /* De dónde vienen los datos:
    - "local":  el tablero lo sirve el propio monitor (http://PC:8080) -> pregunta a /api/estado
@@ -566,11 +579,27 @@ async function load(){
 
 function renderTabs(){
   const nOk=DATA.alianzas.filter(a=>a.estado==='normal').length, peorE=DATA.alianzas.map(a=>a.estado).filter(e=>e!=='sin_datos').sort((x,y)=>rank(y)-rank(x))[0], peorT=peorE?MAP[peorE]:'none';
-  $('tabs').innerHTML=`<button class="tab tab-todas" role="tab" data-k="todas" aria-selected="${active==='todas'}"><span><span class="tab-name">Todas</span></span><span class="tab-meta">${DATA.alianzas.every(enPausa)?pillPausa:pill(peorT)}<span class="tab-ms">${nOk} de ${DATA.alianzas.length} normal</span></span></button>`+DATA.alianzas.map(a=>{
-    const s=MAP[a.estado];
-    return `<button class="tab" role="tab" data-k="${a.id}" aria-selected="${a.id===active}"><span><span class="tab-name">${esc(a.nombre)}</span>${a.modo==='demo'?'<span class="tab-sub">Modo demo · datos simulados</span>':''}</span><span class="tab-meta">${enPausa(a)?pillPausa:pill(s)}<span class="tab-ms">${a.mediana!=null?fmtMs(a.mediana):'–'}</span></span></button>`;
+  const GS=gruposServ(), actA=active==='todas'?null:DATA.alianzas.find(a=>a.id===active), actG=actA?GS.find(g=>g.als.includes(actA)):null;
+  const tabAl=a=>`<button class="tab" role="tab" data-k="${a.id}" aria-selected="${a.id===active}"><span><span class="tab-name">${esc(a.nombre)}</span>${a.modo==='demo'?'<span class="tab-sub">Modo demo</span>':''}</span><span class="tab-meta">${enPausa(a)?pillPausa:pill(MAP[a.estado])}<span class="tab-ms">${a.mediana!=null?fmtMs(a.mediana):'–'}</span></span></button>`;
+  $('tabs').innerHTML=`<button class="tab tab-todas" role="tab" data-k="todas" aria-selected="${active==='todas'}"><span><span class="tab-name">Todas</span></span><span class="tab-meta">${DATA.alianzas.every(enPausa)?pillPausa:pill(peorT)}<span class="tab-ms">${nOk} de ${DATA.alianzas.length} normal</span></span></button>`+GS.map(g=>{
+    const med=g.als.filter(a=>a.estado!=='sin_datos'), pe=med.map(a=>a.estado).sort((x,y)=>rank(y)-rank(x))[0];
+    const ok=g.als.filter(a=>a.estado==='normal').length, varias=g.als.length>1, abierto=g===actG&&varias;
+    const ms=varias?`${ok} de ${g.als.length} normal · ${fmtMs(median(med.map(a=>a.mediana).filter(x=>x!=null)))}`:(g.als[0].mediana!=null?fmtMs(g.als[0].mediana):'–');
+    const sub=varias?`${esc(g.servidor)} · ${g.als.length} alianzas`:(g.servidor.includes(g.als[0].nombre)?esc(g.servidor):`${esc(g.servidor)} · ${esc(g.als[0].nombre)}`);
+    return `<button class="tab${abierto?' open':''}" role="tab" data-g="${esc(g.id)}" aria-selected="${g===actG}" aria-expanded="${varias?abierto:'false'}"><span><span class="tab-name">${esc(g.nombre)}${varias?`<span class="chev">${abierto?'▴':'▾'}</span>`:''}</span><span class="tab-sub">${sub}</span></span><span class="tab-meta">${g.als.every(enPausa)?pillPausa:pill(pe?MAP[pe]:'none')}<span class="tab-ms">${ms}</span></span></button>`;
   }).join('');
-  $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=()=>{active=b.dataset.k;zoom=null;hoverI=null;$('tip').hidden=true;try{localStorage.setItem('monitor-alianza',active);}catch(e){}render();});
+  const sub=$('subtabs'); sub.hidden=!(actG&&actG.als.length>1);
+  sub.innerHTML=sub.hidden?'':actG.als.map(tabAl).join('');
+  const elegir=k=>{active=k;zoom=null;hoverI=null;$('tip').hidden=true;try{localStorage.setItem('monitor-alianza',active);}catch(e){}render();};
+  $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+    if(b.dataset.k){elegir(b.dataset.k);return;}
+    const g=GS.find(x=>x.id===b.dataset.g);
+    if(g===actG&&g.als.length>1){elegir('todas');return;}   // clic otra vez: cierra la franja
+    // Al abrir un servidor se elige la alianza que peor está (la que más interesa mirar)
+    const peor=[...g.als].sort((p,q)=>rank(q.estado)-rank(p.estado)||(q.mediana||0)-(p.mediana||0))[0];
+    elegir(peor.id);
+  });
+  sub.querySelectorAll('.tab').forEach(b=>b.onclick=()=>elegir(b.dataset.k));
   if(DATA.horario&&!DATA.horario.en_horario&&DATA.alianzas.every(enPausa)){$('cross').innerHTML=`<b>Fuera del horario de medición.</b> ${esc(DATA.horario.reanuda)}.`;return;}
   // Diagnóstico cruzado: todas salen por la misma red de la oficina; varias comparten servidor en InConcert.
   const medidas=DATA.alianzas.filter(a=>a.estado!=='sin_datos');
@@ -578,6 +607,7 @@ function renderTabs(){
   const nom=l=>l.map(a=>esc(a.nombre)).join(', ');
   const servs=[...new Set(medidas.map(a=>a.servidor||a.nombre))];
   const porServ=sv=>medidas.filter(a=>(a.servidor||a.nombre)===sv);
+  const svL=sv=>{const x=medidas.find(a=>(a.servidor||a.nombre)===sv);return esc(sv)+(x&&x.nodo?' ('+esc(x.nodo)+')':'');};
   let t;
   if(medidas.length<2) t='<b>Diagnóstico cruzado no disponible:</b> se necesitan al menos dos alianzas midiendo.';
   else if(!bad.length) t='<b>Todas las alianzas operan normal.</b>';
@@ -586,8 +616,8 @@ function renderTabs(){
     const partes=[];
     servs.forEach(sv=>{
       const grupo=porServ(sv), gb=grupo.filter(a=>a.estado!=='normal'); if(!gb.length) return;
-      if(grupo.length>1&&gb.length===grupo.length) partes.push(`<b>Fallan todas las del ${esc(sv)}</b> (${nom(grupo)}): el problema está en ese servidor compartido de InConcert.`);
-      else if(grupo.length>1) partes.push(`<b>${nom(gb)}</b> ${gb.length>1?'presentan':'presenta'} fallas y ${nom(grupo.filter(a=>a.estado==='normal'))}, del mismo ${esc(sv)}, ${grupo.length-gb.length>1?'operan':'opera'} normal: es algo propio de ${gb.length>1?'esas instancias':'esa instancia'} (su base de datos o configuración), no del servidor.`);
+      if(grupo.length>1&&gb.length===grupo.length) partes.push(`<b>Fallan todas las del ${svL(sv)}</b> (${nom(grupo)}): el problema está en ese servidor compartido de InConcert.`);
+      else if(grupo.length>1) partes.push(`<b>${nom(gb)}</b> ${gb.length>1?'presentan':'presenta'} fallas y ${nom(grupo.filter(a=>a.estado==='normal'))}, del mismo ${svL(sv)}, ${grupo.length-gb.length>1?'operan':'opera'} normal: es algo propio de ${gb.length>1?'esas instancias':'esa instancia'} (su base de datos o configuración), no del servidor.`);
       else partes.push(`<b>${nom(gb)}</b> presenta fallas: el problema está en su servidor de InConcert.`);
     });
     t=partes.join(' ')+` <span class="muted">Las demás operan normal saliendo por la misma red de la oficina: no es nuestra red.</span>`;
@@ -865,20 +895,40 @@ function serieDe(a,desdeMin){
   const R=a.rangos['24h'], dur=RANGOS.find(r=>r[0]===rango)[2];
   return {desde:desdeMin,hasta:R.hasta,bloque:R.bloque,agrupado:false,serie:R.serie.filter(p=>p.ts>=desdeMin)};
 }
+/* Serie de un servidor: en cada ciclo, la mediana de sus alianzas (lo típico del servidor, sin que
+   una sola alianza con un pico lo arrastre). Los puntos de un mismo ciclo llegan con segundos de
+   diferencia, así que se juntan los que caen a menos de medio bloque del primero. */
+function serieServ(g,desde){
+  const Vs=g.als.map(a=>serieDe(a,desde)); if(Vs.length===1) return Vs[0];
+  const b=Vs[0].bloque, pts=Vs.flatMap(V=>V.serie).sort((p,q)=>p.ts-q.ts), out=[]; let cur=null;
+  pts.forEach(p=>{if(!cur||p.ts-cur.t0>b/2){cur={t0:p.ts,ps:[]};out.push(cur);}cur.ps.push(p);});
+  return {desde:Vs[0].desde,hasta:Vs[0].hasta,bloque:b,agrupado:Vs[0].agrupado,serie:out.map(c=>{
+    const v=c.ps.map(p=>p.med).filter(x=>x!=null);
+    return {ts:c.t0,med:v.length?median(v):null,fallos:c.ps.reduce((t,p)=>t+(p.fallos||0),0),n:c.ps.length};})};
+}
+function entidadesT(){
+  if(modoT==='alianza') return DATA.alianzas.map(a=>({id:a.id,nombre:a.nombre,color:colorDe(a),serie:d=>serieDe(a,d)}));
+  return gruposServ().map(g=>({id:g.id,nombre:g.nombre,color:g.color,serie:d=>serieServ(g,d)}));
+}
+const colorT=a=>modoT==='alianza'?colorDe(a):grupoDe(a).color;
 function renderTodas(){
   const als=DATA.alianzas;
+  if(!modoT){try{modoT=localStorage.getItem('monitor-modoT');}catch(e){} if(modoT!=='alianza') modoT='servidor';}
+  $('modoT').querySelectorAll('button').forEach(b=>{b.setAttribute('aria-pressed',b.dataset.m===modoT);b.onclick=()=>{modoT=b.dataset.m;try{localStorage.setItem('monitor-modoT',modoT);}catch(e){}renderTodas();};});
+  $('tTitle').textContent=modoT==='alianza'?'Comparativo de alianzas':'Comparativo de servidores';
+  const ents=entidadesT();
   $('clock').textContent=hm(Math.max(...als.map(a=>a.ultima_ts||0)))||'--:--';
   $('rangeSelT').innerHTML=RANGOS.map(r=>`<button data-r="${r[0]}" aria-pressed="${r[0]===rango}">${r[0]==='mes'?'Lo que va del mes':r[0].replace('h',' h').replace('7d','7 días')}</button>`).join('');
   $('rangeSelT').querySelectorAll('button').forEach(b=>b.onclick=()=>{rango=b.dataset.r;try{localStorage.setItem('monitor-rango',rango);}catch(e){}renderTodas();});
   $('legT').className='legend legT';
-  $('legT').innerHTML=als.map(a=>`<button data-k="${a.id}" aria-pressed="${!ocultasT.has(a.id)}"><i class="sw-a" style="background:${colorDe(a)}"></i>${esc(a.nombre)}</button>`).join('')+'<span class="muted">Escala logarítmica</span>';
+  $('legT').innerHTML=ents.map(a=>`<button data-k="${esc(a.id)}" aria-pressed="${!ocultasT.has(a.id)}"><i class="sw-a" style="background:${a.color}"></i>${esc(a.nombre)}</button>`).join('')+'<span class="muted">Escala logarítmica</span>';
   $('legT').querySelectorAll('button').forEach(b=>b.onclick=()=>{ocultasT.has(b.dataset.k)?ocultasT.delete(b.dataset.k):ocultasT.add(b.dataset.k);renderTodas();});
   drawTodas();
   // tabla comparativa
   $('cmpBody').innerHTML=als.map(a=>{
     const st=MAP[a.estado], pct=(a.mediana&&a.base)?Math.round((a.mediana/a.base-1)*100):null;
     const ses=a.sondas.find(x=>x.id==='get_user_session_data'), mesA=a.historico.meses[a.historico.meses.length-1];
-    return `<tr data-k="${a.id}"><td><span style="display:inline-flex;align-items:center;gap:8px"><i class="sw-a" style="background:${colorDe(a)}"></i><b>${esc(a.nombre)}</b></span></td><td>${esc(a.servidor||'')}</td><td>${enPausa(a)?pillPausa:pill(st)}</td><td class="n">${fmtMs(a.mediana)}</td><td class="n">${fmtMs(a.base)}</td><td class="n">${pct==null?'–':(pct>0?'+':'')+pct+'%'}</td><td class="n">${a.picos?a.picos.hoy:'–'}</td><td class="n">${fmtPct(mesA.disponibilidad)}</td><td class="n">${ses&&ses.ultimo&&ses.ultimo.ms!=null?fmtMs(ses.ultimo.ms):'–'}</td><td class="n">${ses&&ses.bytes?fmtKB(ses.bytes):'–'}</td></tr>`;}).join('');
+    return `<tr data-k="${a.id}"><td><span style="display:inline-flex;align-items:center;gap:8px"><i class="sw-a" style="background:${colorT(a)}"></i><b>${esc(a.nombre)}</b></span></td><td>${a.nodo?'<b>'+esc(a.nodo)+'</b> · ':''}${esc(a.servidor||'')}</td><td>${enPausa(a)?pillPausa:pill(st)}</td><td class="n">${fmtMs(a.mediana)}</td><td class="n">${fmtMs(a.base)}</td><td class="n">${pct==null?'–':(pct>0?'+':'')+pct+'%'}</td><td class="n">${a.picos?a.picos.hoy:'–'}</td><td class="n">${fmtPct(mesA.disponibilidad)}</td><td class="n">${ses&&ses.ultimo&&ses.ultimo.ms!=null?fmtMs(ses.ultimo.ms):'–'}</td><td class="n">${ses&&ses.bytes?fmtKB(ses.bytes):'–'}</td></tr>`;}).join('');
   $('cmpBody').querySelectorAll('tr').forEach(tr=>tr.onclick=()=>{active=tr.dataset.k;try{localStorage.setItem('monitor-alianza',active);}catch(e){}render();window.scrollTo({top:0,behavior:'smooth'});});
   // nodos de todos los balanceadores (sumando las alianzas que comparten nodo)
   const S=DATA.salida;
@@ -903,7 +953,7 @@ function renderTodas(){
   const hasta=Math.max(...als.map(a=>a.ultima_ts||0)), desde=rango==='mes'?als[0].rangos.mes.desde:hasta-(RANGOS.find(r=>r[0]===rango)[2]);
   const incs=als.flatMap(a=>a.incidentes.filter(r=>(r.fin||hasta)>=desde).map(r=>({...r,a}))).sort((p,q)=>q.inicio-p.inicio);
   $('incTSub').textContent=`Ordenados del más reciente al más antiguo · ${rango==='mes'?'lo que va del mes':'últimas '+RLBL[rango]}`;
-  $('incT').innerHTML=incs.length?incs.map(r=>`<tr><td><span style="display:inline-flex;align-items:center;gap:8px"><i class="sw-a" style="background:${colorDe(r.a)}"></i>${esc(r.a.nombre)}</span></td><td class="mono">${dm(r.inicio)}</td><td class="mono">${r.fin?hm(r.fin):'<b>En curso</b>'}</td><td class="mono">${Math.round(((r.fin||hasta)-r.inicio)/60)} min</td><td>${pill(MAP[r.peor])}</td><td class="notan">${NOTAN[MAP[r.peor]]||'–'}</td><td class="mono">${r.pico>=CAP?'sin resp.':fmtMs(r.pico)}</td></tr>`).join('')
+  $('incT').innerHTML=incs.length?incs.map(r=>`<tr><td><span style="display:inline-flex;align-items:center;gap:8px"><i class="sw-a" style="background:${colorT(r.a)}"></i>${esc(r.a.nombre)}</span></td><td class="mono">${dm(r.inicio)}</td><td class="mono">${r.fin?hm(r.fin):'<b>En curso</b>'}</td><td class="mono">${Math.round(((r.fin||hasta)-r.inicio)/60)} min</td><td>${pill(MAP[r.peor])}</td><td class="notan">${NOTAN[MAP[r.peor]]||'–'}</td><td class="mono">${r.pico>=CAP?'sin resp.':fmtMs(r.pico)}</td></tr>`).join('')
     :`<tr><td colspan="7" class="empty">Sin incidentes en ${rango==='mes'?'lo que va del mes':'las últimas '+RLBL[rango]}.</td></tr>`;
 }
 function drawTodas(){
@@ -913,8 +963,8 @@ function drawTodas(){
   const desde=(rango==='7d'||rango==='mes')?als[0].rangos[rango].desde:hasta-RANGOS.find(r=>r[0]===rango)[2];
   const span=Math.max(60,hasta-desde);
   const lo=Math.log(80),hi=Math.log(3000), Y=x=>yBot-(Math.log(Math.min(Math.max(x,80),3000))-lo)/(hi-lo)*(yBot-yTop), X=ts=>M.l+(ts-desde)/span*pw;
-  const series=als.map(a=>({a,V:serieDe(a,desde)}));
-  $('tSub').textContent='Peor tiempo de base de datos de cada alianza · '+(rango==='mes'?'lo que va del mes':'las últimas '+RLBL[rango])+((rango==='7d'||rango==='mes')?' (mediana de cada bloque)':'');
+  const series=entidadesT().map(a=>({a,V:a.serie(desde)}));
+  $('tSub').textContent=(modoT==='alianza'?'Peor tiempo de base de datos de cada alianza · ':'Peor tiempo de base de datos; en cada servidor, la mediana de sus alianzas · ')+(rango==='mes'?'lo que va del mes':'las últimas '+RLBL[rango])+((rango==='7d'||rango==='mes')?' (mediana de cada bloque)':'');
   let g='';
   [100,200,500,1000,2000].forEach(tk=>{g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${Y(tk)}" y2="${Y(tk)}" stroke="var(--grid)"/><text x="${M.l-8}" y="${Y(tk)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">${tk>=1000?tk/1000+' s':tk}</text>`;});
   // umbrales en gris: el amarillo y el rojo quedan para las alianzas y los estados
@@ -924,8 +974,8 @@ function drawTodas(){
     if(ocultasT.has(a.id)) return;
     const off=V.agrupado?V.bloque/2:0; let d='',prev=null;
     V.serie.forEach(p=>{if(p.med==null){prev=null;return;}d+=(prev!==null&&p.ts-prev<=V.bloque*2.5?'L':'M')+X(p.ts+off).toFixed(1)+' '+Y(p.med).toFixed(1);prev=p.ts;});
-    g+=`<path d="${d}" fill="none" stroke="${colorDe(a)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-    V.serie.forEach(p=>{if(p.fallos>0) g+=`<circle cx="${X(p.ts+off).toFixed(1)}" cy="${yTop+2}" r="3" fill="${colorDe(a)}" stroke="var(--surface)" stroke-width="1.5"/>`;});
+    g+=`<path d="${d}" fill="none" stroke="${a.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    V.serie.forEach(p=>{if(p.fallos>0) g+=`<circle cx="${X(p.ts+off).toFixed(1)}" cy="${yTop+2}" r="3" fill="${a.color}" stroke="var(--surface)" stroke-width="1.5"/>`;});
   });
   g+=`<line id="xhT" x1="0" x2="0" y1="${yTop}" y2="${stripY+6}" stroke="var(--muted)" visibility="hidden"/><rect id="hitT" x="${M.l}" y="0" width="${pw}" height="${H}" fill="transparent"/>`;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('height',H); svg.innerHTML=g;
@@ -938,7 +988,7 @@ function drawTodas(){
       return b&&bd<=V.bloque*1.5?{a,p:b}:null;}).filter(Boolean).sort((p,q)=>(q.p.med??CAP)-(p.p.med??CAP));
     if(!filas.length){tip.hidden=true;xh.setAttribute('visibility','hidden');return;}
     xh.setAttribute('x1',x);xh.setAttribute('x2',x);xh.setAttribute('visibility','visible');
-    tip.innerHTML=`<b class="mono">${dm(ts)}</b><table>${filas.map(({a,p})=>`<tr><td><span style="display:inline-flex;align-items:center;gap:7px"><i class="sw-a" style="background:${colorDe(a)}"></i>${esc(a.nombre)}</span></td><td>${p.med==null?(p.fallos?'sin resp.':'–'):fmtMs(p.med)}</td></tr>`).join('')}</table>`;
+    tip.innerHTML=`<b class="mono">${dm(ts)}</b><table>${filas.map(({a,p})=>`<tr><td><span style="display:inline-flex;align-items:center;gap:7px"><i class="sw-a" style="background:${a.color}"></i>${esc(a.nombre)}</span></td><td>${p.med==null?(p.fallos?'sin resp.':'–'):fmtMs(p.med)}</td></tr>`).join('')}</table>`;
     tip.hidden=false;
     const cw=$('chartT').clientWidth, pxx=x*(r.width/W), tw=tip.offsetWidth; let left=pxx+14; if(left+tw>cw) left=pxx-tw-14; if(left<0) left=0;
     tip.style.left=left+'px'; tip.style.top='8px';
